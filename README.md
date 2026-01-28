@@ -21,6 +21,8 @@ A brief paragraph explaining what this project does and its purpose.
 - **Branching Strategy**: Create feature branches from `main` (e.g., `feature/login-page`).
 - **Commits**: Use descriptive commit messages.
 - **Pull Requests**: Open PRs to `main` for review.
+- **db dumps**: "db:dump" saves latest db structure for commit
+- **db import**: "db:import" imports latest db structure
 
 ## Tech Stack
 
