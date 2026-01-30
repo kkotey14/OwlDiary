@@ -1,0 +1,606 @@
+import util from 'util';
+import express from 'express';
+import cors from 'cors';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
+import multer from 'multer'; // Import multer
+import sqlite3 from 'sqlite3'; // Import sqlite3
+import fs from 'fs'; // Import fs
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const app = express();
+const port = process.env.PORT || 5050;
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+
+// Database setup
+const DB_PATH = path.join(__dirname, 'classroom_blog.db');
+const SCHEMA_PATH = path.join(__dirname, '../Database/schema.sql');
+
+const db = new sqlite3.Database(DB_PATH, (err) => {
+    if (err) {
+        console.error('Error opening database', err.message);
+    } else {
+        console.log('Connected to the SQLite database.');
+        initializeDatabase();
+    }
+});
+
+// Promisify db methods (keep lastID/changes for run)
+const dbGet = db.get.bind(db);
+const dbAll = db.all.bind(db);
+const dbRun = db.run.bind(db);
+db.get = util.promisify(dbGet);
+db.all = util.promisify(dbAll);
+db.run = (sql, params = []) =>
+  new Promise((resolve, reject) => {
+    dbRun(sql, params, function (err) {
+      if (err) {
+        reject(err);
+        return;
+      }
+      resolve({ lastID: this.lastID, changes: this.changes });
+    });
+  });
+
+function initializeDatabase() {
+    const schema = fs.readFileSync(SCHEMA_PATH, 'utf8');
+    console.log('Attempting to initialize database schema from:', SCHEMA_PATH);
+    db.exec(schema, (err) => {
+        if (err) {
+            console.error('Error initializing database schema', err.message);
+        } else {
+            console.log('Database schema initialized successfully.');
+            seedDatabase();
+        }
+    });
+}
+
+async function seedDatabase() {
+    const checkStudentsSql = 'SELECT COUNT(*) AS count FROM students';
+    db.get(checkStudentsSql, async (err, row) => {
+        if (err) {
+            console.error('Error checking students table', err.message);
+            return;
+        }
+
+        console.log('Current student count:', row.count); // Added console log
+        if (row.count === 0) {
+            console.log('Seeding initial student and post data...');
+            
+            const saltRounds = 10;
+            const students = [
+                {
+                    name: 'Admin User',
+                    email: 'admin@test.com',
+                    password: 'password123',
+                    about: 'I am the admin.',
+                    avatar: 'https://i.pravatar.cc/150?img=1'
+                },
+                {
+                    name: 'Mike Example',
+                    email: 'mike@example.com',
+                    password: 'password456',
+                    about: 'Just a regular user.',
+                    avatar: 'https://i.pravatar.cc/150?img=2'
+                }
+            ];
+
+            const insertStudent = db.prepare('INSERT INTO students (name, email, password, about_me, avatar_url) VALUES (?, ?, ?, ?, ?)');
+            
+            for (const s of students) {
+                const hashedPassword = await bcrypt.hash(s.password, saltRounds);
+                insertStudent.run(s.name, s.email, hashedPassword, s.about, s.avatar);
+            }
+            
+            insertStudent.finalize();
+
+            const insertPost = db.prepare('INSERT INTO posts (student_id, title, content, post_type) VALUES (?, ?, ?, ?)');
+            const posts = [
+                { student_id: 1, title: 'Admin Post', content: 'This is a post from the admin.', type: 'text' },
+                { student_id: 2, title: 'Mike\'s Musings', content: 'Hello world!', type: 'text' },
+            ];
+            posts.forEach(p => insertPost.run(p.student_id, p.title, p.content, p.type));
+            insertPost.finalize(err => {
+                 if (!err) console.log('Database seeded.');
+            });
+        } else {
+            console.log('Database already contains data.');
+        }
+    });
+}
+
+
+app.use(cors());
+app.use(express.json());
+
+// Serve static files from the 'uploads' directory
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Multer configuration for file uploads
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, path.join(__dirname, 'uploads'));
+  },
+  filename: function (req, file, cb) {
+    cb(null, Date.now() + '-' + file.originalname);
+  }
+});
+
+// File filter to accept only images and videos
+const fileFilter = (req, file, cb) => {
+  if (file.mimetype.startsWith('image/') || file.mimetype.startsWith('video/')) {
+    cb(null, true);
+  } else {
+    cb(new Error('Only image and video files are allowed!'), false);
+  }
+};
+
+const upload = multer({ storage: storage, fileFilter: fileFilter });
+const avatarStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, path.join(__dirname, 'uploads'));
+  },
+  filename: function (req, file, cb) {
+    const userId = req.user ? req.user.id : 'unknown';
+    const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+    cb(null, `profile-${userId}-${Date.now()}-${safeName}`);
+  }
+});
+const avatarUpload = multer({
+  storage: avatarStorage,
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed for avatars.'), false);
+    }
+  }
+});
+
+// Middleware to protect routes
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ error: 'Authentication token required.' });
+  }
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) {
+      return res.status(403).json({ error: 'Invalid or expired token.' });
+    }
+    req.user = user;
+    next();
+  });
+};
+
+// API Endpoints
+app.post('/api/signup', async (req, res) => {
+  console.log('Signup request received');
+  const { name, email, password } = req.body;
+
+  if (!name || !email || !password) {
+    return res.status(400).json({ error: 'Please provide all required fields.' });
+  }
+
+  try {
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const avatar_url = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`;
+    const about_me = 'New community member';
+    
+    const sql = 'INSERT INTO students (name, email, password, avatar_url, about_me) VALUES (?, ?, ?, ?, ?)';
+    
+    await db.run(sql, [name, email, hashedPassword, avatar_url, about_me]);
+    
+    return res.status(201).json({ message: 'User created successfully.' });
+  } catch (error) {
+    console.error('Signup error:', error);
+    if (error.message.includes('UNIQUE constraint failed')) {
+      return res.status(409).json({ error: 'Email already exists.' });
+    }
+    return res.status(500).json({ error: 'Server error during signup request processing.' });
+  }
+});
+
+app.post('/api/login', async (req, res) => {
+  console.log('Login request received');
+  try {
+    console.log('Login route: Starting processing for login request.');
+    const { email, password } = req.body;
+    console.log('Login attempt for:', email);
+
+    if (!email || !password) {
+      console.error('Login route: Missing email or password.');
+      return res.status(400).json({ error: 'Please provide email and password.' });
+    }
+
+    const sql = 'SELECT * FROM students WHERE email = ?';
+    const user = await db.get(sql, [email]);
+    console.log('User found:', user);
+
+    if (!user) {
+      console.error('Login route: User not found for email:', email);
+      return res.status(401).json({ error: 'User not found.' });
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      console.error('Login route: Invalid credentials for email:', email);
+      return res.status(401).json({ error: 'Invalid credentials.' });
+    }
+
+    const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, {
+      expiresIn: '1h',
+    });
+    console.log('Login route: User authenticated, sending token.');
+    return res.json({ token });
+  } catch (error) {
+    console.error('Login error (catch block):', error);
+    return res.status(500).json({ error: 'Server error during login request processing.' });
+  }
+});
+
+app.get('/api/user-stats/:userId', authenticateToken, async (req, res) => {
+  const { userId } = req.params;
+
+  if (!req.user) {
+    console.error('API /user-stats: Unauthorized - User not authenticated.');
+    return res.status(401).json({ message: 'Unauthorized: User not authenticated.' });
+  }
+
+  if (!userId) {
+    console.error('API /user-stats: Bad Request - User ID is required.');
+    return res.status(400).json({ message: 'User ID is required.' });
+  }
+
+  // Ensure the user is requesting their own stats if a token is present
+  if (req.user.id != userId) {
+    console.error(`API /user-stats: Forbidden - User ${req.user.id} attempted to view stats for user ${userId}.`);
+    return res.status(403).json({ message: 'Forbidden: Unauthorized to view these stats.' });
+  }
+
+  try {
+    const postsCount = await db.get('SELECT COUNT(*) as count FROM posts WHERE student_id = ?', [userId]);
+    const commentsCount = await db.get('SELECT COUNT(*) as count FROM comments WHERE user_id = ?', [userId]);
+    const likesCountResult = await db.get('SELECT COUNT(*) as count FROM likes WHERE user_id = ?', [userId]);
+    const receivedLikesCount = await db.get('SELECT SUM(likes) as count FROM posts WHERE student_id = ?', [userId]);
+    const userProfile = await db.get('SELECT name, avatar_url, about_me FROM students WHERE id = ?', [userId]);
+
+
+    return res.json({
+      posts: postsCount ? postsCount.count : 0,
+      comments: commentsCount ? commentsCount.count : 0,
+      likes: likesCountResult ? likesCountResult.count : 0, // Likes given by this user
+      receivedLikes: receivedLikesCount && receivedLikesCount.count ? receivedLikesCount.count : 0, // Likes on this user's posts
+      avatar_url: userProfile ? userProfile.avatar_url : null,
+      name: userProfile ? userProfile.name : null,
+      about_me: userProfile ? userProfile.about_me : null,
+    });
+  } catch (error) {
+    console.error(`Error fetching user stats for ID ${userId}:`, error);
+    return res.status(500).json({ message: 'Server error while fetching user stats.' });
+  }
+});
+
+app.post('/api/posts', authenticateToken, upload.single('media'), async (req, res) => {
+  const { title, content, post_type } = req.body;
+  const student_id = req.user.id; // Get student_id from authenticated token
+  const media_url = req.file ? `/uploads/${req.file.filename}` : null; // Get media URL if file uploaded
+
+  if (!student_id || !title || !content || !post_type) {
+    console.error('Error creating post: Missing required fields (student_id, title, content, post_type).');
+    return res.status(400).json({ message: 'All fields are required to create a post.' });
+  }
+
+  try {
+    const insertSql = 'INSERT INTO posts (student_id, title, content, post_type, media_url, likes, created_at) VALUES (?, ?, ?, ?, ?, 0, CURRENT_TIMESTAMP)';
+    const result = await db.run(insertSql, [student_id, title, content, post_type, media_url]);
+    const newPostId = result.lastID;
+
+    // Fetch the newly created post with all its data, including student info
+    const fetchSql = `
+      SELECT 
+        p.id, p.title, p.content, p.post_type, p.likes, p.created_at, p.media_url,
+        s.name as student_name, s.avatar_url as student_avatar
+      FROM posts p
+      JOIN students s ON p.student_id = s.id
+      WHERE p.id = ?`;
+    const newPost = await db.get(fetchSql, [newPostId]);
+
+    return res.status(201).json({ success: true, post: newPost });
+  } catch (error) {
+    console.error('Error creating post:', error);
+    return res.status(500).json({ message: 'Error creating post.' });
+  }
+});
+
+app.post('/api/posts/:id/like', authenticateToken, async (req, res) => {
+  const { id: postId } = req.params;
+  const userId = req.user.id;
+
+  try {
+    const existingLike = await db.get('SELECT * FROM likes WHERE user_id = ? AND post_id = ?', [userId, postId]);
+
+    if (existingLike) {
+      // User already liked, so unlike
+      await db.run('DELETE FROM likes WHERE user_id = ? AND post_id = ?', [userId, postId]);
+      await db.run('UPDATE posts SET likes = likes - 1 WHERE id = ?', [postId]);
+    } else {
+      // User has not liked, so like
+      await db.run('INSERT INTO likes (user_id, post_id) VALUES (?, ?)', [userId, postId]);
+      await db.run('UPDATE posts SET likes = likes + 1 WHERE id = ?', [postId]);
+    }
+
+    // Fetch the updated post with all its data, including joined student info and current like status
+    const updatedPost = await db.get(
+      `SELECT 
+        p.id, p.title, p.content, p.post_type, p.likes, p.created_at, p.media_url,
+        s.name as student_name, s.avatar_url as student_avatar,
+        CASE WHEN EXISTS (SELECT 1 FROM likes WHERE user_id = ? AND post_id = p.id) THEN 1 ELSE 0 END AS isLiked,
+        (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) AS comment_count
+       FROM posts p
+       JOIN students s ON p.student_id = s.id
+       LEFT JOIN likes l ON p.id = l.post_id AND l.user_id = ?
+       WHERE p.id = ?`,
+      [userId, userId, postId] // userId for EXISTS and LEFT JOIN, postId for WHERE
+    );
+
+    if (!updatedPost) {
+      return res.status(404).json({ message: 'Post not found after update.' });
+    }
+
+    return res.json(updatedPost);
+  } catch (error) {
+    console.error('Error toggling like:', error);
+    return res.status(500).json({ message: 'Error toggling like.' });
+  }
+});
+
+app.put('/api/posts/:id', authenticateToken, async (req, res) => {
+  const { id: postId } = req.params;
+  const { title, content } = req.body;
+  const userId = req.user.id;
+
+  if (!title || !content) {
+    return res.status(400).json({ message: 'Title and content are required.' });
+  }
+
+  try {
+    const existingPost = await db.get('SELECT * FROM posts WHERE id = ?', [postId]);
+    if (!existingPost) {
+      return res.status(404).json({ message: 'Post not found.' });
+    }
+    if (existingPost.student_id !== userId) {
+      return res.status(403).json({ message: 'Forbidden: You can only edit your own posts.' });
+    }
+
+    await db.run('UPDATE posts SET title = ?, content = ? WHERE id = ?', [title, content, postId]);
+
+    const updatedPost = await db.get(
+      `SELECT 
+        p.id, p.title, p.content, p.post_type, p.likes, p.created_at, p.media_url,
+        s.name as student_name, s.avatar_url as student_avatar,
+        CASE WHEN EXISTS (SELECT 1 FROM likes WHERE user_id = ? AND post_id = p.id) THEN 1 ELSE 0 END AS isLiked,
+        (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) AS comment_count
+       FROM posts p
+       JOIN students s ON p.student_id = s.id
+       WHERE p.id = ?`,
+      [userId, postId]
+    );
+
+    return res.json(updatedPost);
+  } catch (error) {
+    console.error('Error updating post:', error);
+    return res.status(500).json({ message: 'Error updating post.' });
+  }
+});
+
+app.delete('/api/posts/:id', authenticateToken, async (req, res) => {
+  const { id: postId } = req.params;
+  const userId = req.user.id;
+
+  try {
+    const existingPost = await db.get('SELECT * FROM posts WHERE id = ?', [postId]);
+    if (!existingPost) {
+      return res.status(404).json({ message: 'Post not found.' });
+    }
+    if (existingPost.student_id !== userId) {
+      return res.status(403).json({ message: 'Forbidden: You can only delete your own posts.' });
+    }
+
+    await db.run('DELETE FROM comments WHERE post_id = ?', [postId]);
+    await db.run('DELETE FROM likes WHERE post_id = ?', [postId]);
+    await db.run('DELETE FROM posts WHERE id = ?', [postId]);
+
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting post:', error);
+    return res.status(500).json({ message: 'Error deleting post.' });
+  }
+});
+
+app.get('/api/posts/:id/comments', authenticateToken, async (req, res) => {
+  const { id: postId } = req.params;
+
+  try {
+    const comments = await db.all(
+      `SELECT 
+        c.id, c.content, c.created_at,
+        s.name AS user_name, s.avatar_url AS user_avatar
+       FROM comments c
+       JOIN students s ON c.user_id = s.id
+       WHERE c.post_id = ?
+       ORDER BY c.created_at ASC`,
+      [postId]
+    );
+
+    return res.json(comments);
+  } catch (error) {
+    console.error('Error fetching comments:', error);
+    return res.status(500).json({ message: 'Error fetching comments.' });
+  }
+});
+
+app.post('/api/posts/:id/comments', authenticateToken, async (req, res) => {
+  const { id: postId } = req.params;
+  const { content } = req.body;
+  const userId = req.user.id;
+
+  if (!content || !content.trim()) {
+    return res.status(400).json({ message: 'Comment content is required.' });
+  }
+
+  try {
+    const insertSql = 'INSERT INTO comments (post_id, user_id, content) VALUES (?, ?, ?)';
+    const result = await db.run(insertSql, [postId, userId, content.trim()]);
+
+    const newComment = await db.get(
+      `SELECT 
+        c.id, c.content, c.created_at,
+        s.name AS user_name, s.avatar_url AS user_avatar
+       FROM comments c
+       JOIN students s ON c.user_id = s.id
+       WHERE c.id = ?`,
+      [result.lastID]
+    );
+
+    return res.status(201).json({ comment: newComment });
+  } catch (error) {
+    console.error('Error creating comment:', error);
+    return res.status(500).json({ message: 'Error creating comment.' });
+  }
+});
+
+app.put('/api/profile', authenticateToken, avatarUpload.single('avatar'), async (req, res) => {
+  const { about_me, name } = req.body;
+  const userId = req.user.id;
+  const avatar_url = req.file ? `/uploads/${req.file.filename}` : null;
+
+  const updates = [];
+  const params = [];
+
+  if (typeof about_me === 'string') {
+    updates.push('about_me = ?');
+    params.push(about_me.trim());
+  }
+  if (typeof name === 'string' && name.trim()) {
+    updates.push('name = ?');
+    params.push(name.trim());
+  }
+  if (avatar_url) {
+    updates.push('avatar_url = ?');
+    params.push(avatar_url);
+  }
+
+  if (updates.length === 0) {
+    return res.status(400).json({ message: 'No profile updates provided.' });
+  }
+
+  try {
+    params.push(userId);
+    await db.run(`UPDATE students SET ${updates.join(', ')} WHERE id = ?`, params);
+
+    const updatedUser = await db.get(
+      'SELECT id, name, email, about_me, avatar_url FROM students WHERE id = ?',
+      [userId]
+    );
+
+    return res.json(updatedUser);
+  } catch (error) {
+    console.error('Error updating profile:', error);
+    return res.status(500).json({ message: 'Error updating profile.' });
+  }
+});
+
+
+
+
+app.get('/api/posts', authenticateToken, async (req, res) => {
+  if (!req.user) {
+    console.error('API /posts: Unauthorized - User not authenticated.');
+    return res.status(401).json({ message: 'Unauthorized: User not authenticated.' });
+  }
+
+  const userId = req.user.id; // Get current user ID from token
+  try {
+    const sql = `
+      SELECT 
+        p.id, p.title, p.content, p.post_type, p.likes, p.created_at, p.media_url,
+        s.name as student_name, s.avatar_url as student_avatar,
+        CASE WHEN l.user_id IS NOT NULL THEN 1 ELSE 0 END AS isLiked,
+        (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) AS comment_count
+      FROM posts p
+      JOIN students s ON p.student_id = s.id
+      LEFT JOIN likes l ON p.id = l.post_id AND l.user_id = ?
+      ORDER BY p.created_at DESC
+    `;
+    const posts = await db.all(sql, [userId]);
+    return res.json(posts);
+  } catch (error) {
+    console.error('Error fetching posts:', error);
+    return res.status(500).json({ message: 'Server error while fetching posts.' });
+  }
+});
+
+// Student directory routes
+app.get('/api/students', async (req, res) => {
+  try {
+    const rows = await db.all('SELECT * FROM students ORDER BY name');
+    return res.json(rows);
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/students/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const row = await db.get('SELECT * FROM students WHERE id = ?', [id]);
+    if (!row) {
+      return res.status(404).json({ error: 'Student not found' });
+    }
+    return res.json(row);
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/students/:id/posts', async (req, res) => {
+  const { id } = req.params;
+  const sql = `
+    SELECT 
+      p.id, p.title, p.content, p.post_type, p.likes, p.created_at, p.media_url,
+      s.name as student_name, s.avatar_url as student_avatar,
+      (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) AS comment_count
+    FROM posts p
+    JOIN students s ON p.student_id = s.id
+    WHERE p.student_id = ?
+    ORDER BY p.created_at DESC
+  `;
+  try {
+    const rows = await db.all(sql, [id]);
+    return res.json(rows);
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.join(__dirname, '../dist')));
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../dist/index.html'));
+  });
+} else {
+  app.use((req, res) => {
+    res.status(404).send('API Route Not Found');
+  });
+}
+
+app.listen(port, () => {
+  console.log(`Server listening on port ${port}`);
+});

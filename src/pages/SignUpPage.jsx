@@ -1,0 +1,281 @@
+import React, { useState } from 'react';
+import styled from 'styled-components';
+import { Link, useNavigate } from 'react-router-dom';
+import { FiEye, FiEyeOff } from 'react-icons/fi';
+
+const PasswordInputContainer = styled.div`
+  position: relative;
+  width: 100%;
+  box-sizing: border-box;
+
+  & > input {
+    padding-right: 45px;
+  }
+`;
+
+const PasswordToggleButton = styled.span`
+  position: absolute;
+  right: 15px;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 1.1rem;
+
+  &:hover {
+    color: #ffffff;
+  }
+`;
+
+const PageWrapper = styled.div`
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  background: linear-gradient(180deg, #84fab0 0%, #8fd3f4 100%);
+  font-family: 'Inter', sans-serif;
+  overflow: hidden;
+  position: relative;
+`;
+
+const EditorialSection = styled.div`
+  flex: 1.5;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  padding-left: 10%;
+  position: relative;
+  z-index: 2;
+`;
+
+const DateDetail = styled.p`
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.7);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 20px;
+`;
+
+const WelcomeMessage = styled.h1`
+  font-family: 'Playfair Display', serif;
+  font-size: 5rem;
+  font-weight: 700;
+  line-height: 1.1;
+  color: #ffffff;
+  margin-left: -70px;
+`;
+
+const FeaturedQuote = styled.blockquote`
+  font-family: 'Georgia', serif;
+  font-size: 1.1rem;
+  font-style: italic;
+  color: rgba(255, 255, 255, 0.9);
+  max-width: 300px;
+  margin-top: 1.5rem;
+  line-height: 1.5;
+`;
+
+const FormSection = styled.div`
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1;
+`;
+
+const GlassForm = styled.form`
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(15px);
+  padding: 3rem 2.5rem;
+  border-radius: 20px;
+  width: 100%;
+  max-width: 450px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.1);
+`;
+
+const Title = styled.h2`
+  font-family: 'Playfair Display', serif;
+  font-size: 2.2rem;
+  font-weight: 700;
+  color: #ffffff;
+  text-align: center;
+  margin-bottom: 1rem;
+`;
+
+const Input = styled.input`
+  padding: 1rem 1.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 12px;
+  font-size: 1rem;
+  background-color: transparent;
+  color: #ffffff;
+  transition: all 0.3s ease;
+  box-sizing: border-box; /* Ensure consistent box model */
+  width: 100%; /* Ensure all inputs take full width */
+
+  &::placeholder {
+    color: rgba(255, 255, 255, 0.6);
+  }
+
+  &:focus {
+    outline: none;
+    background-color: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.7);
+  }
+`;
+
+const GhostButton = styled.button`
+  padding: 1rem;
+  border: 2px solid white;
+  border-radius: 12px;
+  background: transparent;
+  color: white;
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+
+  &:hover {
+    background: white;
+    color: #84fab0;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+`;
+
+const LinksContainer = styled.div`
+  text-align: center;
+  margin-top: 0.5rem;
+`;
+
+const StyledLink = styled(Link)`
+  color: rgba(255, 255, 255, 0.8);
+  text-decoration: none;
+  font-size: 0.9rem;
+
+  &:hover {
+    color: #ffffff;
+    text-decoration: underline;
+  }
+`;
+
+const ErrorMessage = styled.p`
+  color: #ff6b6b;
+  text-align: center;
+  font-size: 0.9rem;
+`;
+
+const SignUpPage = () => {
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [error, setError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const navigate = useNavigate();
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/signup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name, email, password }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to sign up');
+      }
+
+      navigate('/login');
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const formattedDate = new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric', year: 'numeric' }).format(new Date()).toUpperCase();
+
+  return (
+    <PageWrapper>
+      <EditorialSection>
+        <DateDetail>{formattedDate} // ISSUE NO. 1</DateDetail>
+        <WelcomeMessage>Start Your Story.</WelcomeMessage>
+        <FeaturedQuote>
+          'The palest ink is better than the best memory.' — Chinese Proverb.
+        </FeaturedQuote>
+      </EditorialSection>
+      <FormSection>
+        <GlassForm onSubmit={handleSubmit}>
+          <Title>Create Account</Title>
+          {error && <ErrorMessage>{error}</ErrorMessage>}
+          <Input
+            type="text"
+            placeholder="Full Name"
+            required
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+          <Input
+            type="email"
+            placeholder="Email Address"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+          <PasswordInputContainer>
+            <Input
+              type={showPassword ? 'text' : 'password'}
+              placeholder="Password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            <PasswordToggleButton onClick={() => setShowPassword(!showPassword)}>
+              {showPassword ? <FiEyeOff /> : <FiEye />}
+            </PasswordToggleButton>
+          </PasswordInputContainer>
+          <PasswordInputContainer>
+            <Input
+              type={showConfirmPassword ? 'text' : 'password'}
+              placeholder="Confirm Password"
+              required
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+            />
+            <PasswordToggleButton onClick={() => setShowConfirmPassword(!showConfirmPassword)}>
+              {showConfirmPassword ? <FiEyeOff /> : <FiEye />}
+            </PasswordToggleButton>
+          </PasswordInputContainer>
+          <GhostButton type="submit" disabled={password !== confirmPassword || !password || !confirmPassword}>
+            Sign Up
+          </GhostButton>
+          <LinksContainer>
+            <StyledLink to="/login">Already have an account? Login</StyledLink>
+          </LinksContainer>
+        </GlassForm>
+      </FormSection>
+    </PageWrapper>
+  );
+};
+
+export default SignUpPage;
