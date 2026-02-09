@@ -88,7 +88,7 @@ const WelcomeMessage = styled.h1`
   font-weight: 700;
   line-height: 1.1;
   color: #0f172a;
-  margin-left: -70px;
+  margin-left: 0;
 
   span {
     font-size: 7rem;
