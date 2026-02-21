@@ -52,6 +52,15 @@ const PostInput = styled.input`
   font-size: 1rem;
 `;
 
+const Select = styled.select`
+  width: 100%;
+  padding: 0.8rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 1rem;
+  background: white;
+`;
+
 const FileInputLabel = styled.label`
   display: block;
   padding: 0.8rem 1.5rem;
@@ -127,6 +136,7 @@ const ErrorMessage = styled.p`
 const CreatePostModal = ({ onClose, onPostCreated }) => {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  const [postFont, setPostFont] = useState("'Inter', sans-serif");
   const [mediaFile, setMediaFile] = useState(null);
   const [mediaPreviewUrl, setMediaPreviewUrl] = useState(null);
   const [error, setError] = useState(null);
@@ -184,6 +194,7 @@ const CreatePostModal = ({ onClose, onPostCreated }) => {
     formData.append('title', title);
     formData.append('content', content);
     formData.append('post_type', post_type);
+    formData.append('font_family', postFont);
     if (mediaFile) {
       formData.append('media', mediaFile); // 'media' is the field name Multer expects
     }
@@ -289,7 +300,35 @@ const CreatePostModal = ({ onClose, onPostCreated }) => {
           placeholder="What's on your mind?"
           value={content}
           onChange={(e) => setContent(e.target.value)}
+          style={{ fontFamily: postFont }}
         />
+        <Select value={postFont} onChange={(e) => setPostFont(e.target.value)}>
+          <option value="'Inter', sans-serif">Inter</option>
+          <option value="'Poppins', sans-serif">Poppins</option>
+          <option value="'Montserrat', sans-serif">Montserrat</option>
+          <option value="'Raleway', sans-serif">Raleway</option>
+          <option value="'Nunito', sans-serif">Nunito</option>
+          <option value="'Karla', sans-serif">Karla</option>
+          <option value="'Fira Sans', sans-serif">Fira Sans</option>
+          <option value="'Source Sans 3', sans-serif">Source Sans 3</option>
+          <option value="'Space Grotesk', sans-serif">Space Grotesk</option>
+          <option value="'DM Sans', sans-serif">DM Sans</option>
+          <option value="'Work Sans', sans-serif">Work Sans</option>
+          <option value="'Manrope', sans-serif">Manrope</option>
+          <option value="'Rubik', sans-serif">Rubik</option>
+          <option value="'IBM Plex Sans', sans-serif">IBM Plex Sans</option>
+          <option value="'Playfair Display', serif">Playfair Display</option>
+          <option value="'Merriweather', serif">Merriweather</option>
+          <option value="'Lora', serif">Lora</option>
+          <option value="'Source Serif 4', serif">Source Serif 4</option>
+          <option value="'Libre Baskerville', serif">Libre Baskerville</option>
+          <option value="'Crimson Text', serif">Crimson Text</option>
+          <option value="Georgia, serif">Georgia</option>
+          <option value="'Times New Roman', serif">Times New Roman</option>
+          <option value="'Courier New', monospace">Courier New</option>
+          <option value="'Brush Script MT', cursive">Brush Script MT</option>
+          <option value="cursive">Cursive</option>
+        </Select>
         <input
           type="file"
           id="media-upload"

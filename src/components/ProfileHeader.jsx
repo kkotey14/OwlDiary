@@ -6,7 +6,7 @@ import { getAuthTokenOrLogout } from '../utils/auth';
 import { resolveMediaUrl } from '../utils/media';
 
 const HeaderContainer = styled.div`
-  background: white;
+  background: var(--profile-card, white);
   border-radius: 16px;
   padding: 2rem;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
@@ -14,7 +14,6 @@ const HeaderContainer = styled.div`
   align-items: center;
   gap: 2rem;
   margin-bottom: 2rem;
-  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
 `;
 
 const Avatar = styled.img`
@@ -31,18 +30,18 @@ const Info = styled.div`
 const Name = styled.h1`
   font-size: 2.5rem;
   font-weight: 700;
-  color: #2c3e50;
+  color: var(--profile-text, #2c3e50);
 `;
 
 const AboutMe = styled.p`
-  color: #556;
+  color: var(--profile-muted, #556);
   line-height: 1.6;
   margin-top: 0.5rem;
   font-size: 1.1rem;
 `;
 
 const EditButton = styled.button`
-  background: #667eea;
+  background: var(--profile-accent, #667eea);
   color: white;
   border: none;
   border-radius: 8px;
@@ -53,7 +52,7 @@ const EditButton = styled.button`
   transition: background-color 0.3s;
 
   &:hover {
-    background: #5a6edc;
+    background: var(--profile-accent-dark, #5a6edc);
   }
 `;
 
