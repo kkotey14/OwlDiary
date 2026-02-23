@@ -51,6 +51,9 @@ async function ensureStudentColumns() {
         const columns = await db.all('PRAGMA table_info(students)');
         const existing = new Set(columns.map((col) => col.name));
 
+        if (!existing.has('role')) {
+            await db.run('ALTER TABLE students ADD COLUMN role TEXT DEFAULT \'user\'');
+        }
         if (!existing.has('appearance_theme')) {
             await db.run('ALTER TABLE students ADD COLUMN appearance_theme TEXT');
         }
@@ -66,6 +69,42 @@ async function ensureStudentColumns() {
         }
     } catch (error) {
         console.error('Error ensuring student appearance columns', error.message);
+    }
+}
+
+async function ensureAdminAccount() {
+    const adminEmail = process.env.ADMIN_EMAIL;
+    const adminPassword = process.env.ADMIN_PASSWORD;
+    const adminName = process.env.ADMIN_NAME || 'Admin';
+
+    if (!adminEmail || !adminPassword) {
+        return;
+    }
+
+    try {
+        const existingAdmin = await db.get('SELECT id FROM students WHERE role = ?', ['admin']);
+        const existingByEmail = await db.get('SELECT id, role FROM students WHERE email = ?', [adminEmail]);
+
+        if (existingByEmail) {
+            if (existingByEmail.role !== 'admin') {
+                await db.run('UPDATE students SET role = ? WHERE id = ?', ['admin', existingByEmail.id]);
+            }
+            return;
+        }
+
+        if (existingAdmin) {
+            return;
+        }
+
+        const hashedPassword = await bcrypt.hash(adminPassword, 10);
+        const avatar_url = `https://ui-avatars.com/api/?name=${encodeURIComponent(adminName)}&background=random`;
+        const about_me = 'Administrator account';
+        await db.run(
+            'INSERT INTO students (name, email, password, avatar_url, about_me, role) VALUES (?, ?, ?, ?, ?, ?)',
+            [adminName, adminEmail, hashedPassword, avatar_url, about_me, 'admin']
+        );
+    } catch (error) {
+        console.error('Error ensuring admin account', error.message);
     }
 }
 
@@ -98,6 +137,7 @@ function initializeDatabase() {
             console.log('Database schema initialized successfully.');
             await ensureStudentColumns();
             await ensurePostColumns();
+            await ensureAdminAccount();
             seedDatabase();
         }
     });
@@ -278,7 +318,7 @@ app.post('/api/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials.' });
     }
 
-    const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, {
+    const token = jwt.sign({ id: user.id, email: user.email, role: user.role || 'user' }, JWT_SECRET, {
       expiresIn: '1h',
     });
     console.log('Login route: User authenticated, sending token.');
@@ -451,6 +491,7 @@ app.put('/api/posts/:id/visibility', authenticateToken, async (req, res) => {
   const { id: postId } = req.params;
   const { is_hidden } = req.body;
   const userId = req.user.id;
+  let isAdmin = req.user && req.user.role === 'admin';
   const hiddenValue =
     is_hidden === true || is_hidden === 1 || is_hidden === '1' || is_hidden === 'true' ? 1 : 0;
 
@@ -459,7 +500,11 @@ app.put('/api/posts/:id/visibility', authenticateToken, async (req, res) => {
     if (!existingPost) {
       return res.status(404).json({ message: 'Post not found.' });
     }
-    if (existingPost.student_id !== userId) {
+    if (!isAdmin) {
+      const roleRow = await db.get('SELECT role FROM students WHERE id = ?', [userId]);
+      isAdmin = roleRow && roleRow.role === 'admin';
+    }
+    if (!isAdmin && existingPost.student_id !== userId) {
       return res.status(403).json({ message: 'Forbidden: You can only hide your own posts.' });
     }
 
