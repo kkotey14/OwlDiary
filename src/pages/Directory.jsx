@@ -99,12 +99,19 @@ const Directory = () => {
 
   const filteredStudents = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    if (!normalized) return students;
-    return students.filter((student) => {
-      const name = (student.name || '').toLowerCase();
-      const email = (student.email || '').toLowerCase();
-      const about = (student.about_me || '').toLowerCase();
-      return name.includes(normalized) || email.includes(normalized) || about.includes(normalized);
+    const list = normalized
+      ? students.filter((student) => {
+          const name = (student.name || '').toLowerCase();
+          const email = (student.email || '').toLowerCase();
+          const about = (student.about_me || '').toLowerCase();
+          return name.includes(normalized) || email.includes(normalized) || about.includes(normalized);
+        })
+      : students;
+
+    return [...list].sort((a, b) => {
+      const aAdmin = a.role === 'admin' ? 1 : 0;
+      const bAdmin = b.role === 'admin' ? 1 : 0;
+      return bAdmin - aAdmin;
     });
   }, [students, query]);
 

@@ -13,6 +13,7 @@ const Card = styled.div`
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  opacity: ${(props) => (props.$isHidden ? 0.6 : 1)};
 `;
 
 const AuthorInfo = styled.div`
@@ -100,16 +101,39 @@ const OwnerButton = styled.button`
   }
 `;
 
+const HiddenBadge = styled.span`
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #1f2937;
+  background: #fef3c7;
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+  align-self: flex-start;
+`;
+
+
 const StyledFiHeart = styled(FiHeart)`
   color: ${props => props.$isLiked ? 'red' : '#888'};
   transition: color 0.3s;
 `;
 
-const PostCard = ({ post, onLikeSuccess, fetchStats, onCommentClick, canEdit, onEdit, onDelete }) => {
+const PostCard = ({
+  post,
+  onLikeSuccess,
+  fetchStats,
+  onCommentClick,
+  canEdit,
+  canHide,
+  onEdit,
+  onDelete,
+  onToggleVisibility,
+}) => {
   const [currentLikes, setCurrentLikes] = useState(post.likes);
   const [isLiked, setIsLiked] = useState(post.isLiked === 1); // Initialize from prop
   const navigate = useNavigate();
   const canComment = typeof onCommentClick === 'function';
+  const isHidden = post.is_hidden === 1 || post.is_hidden === true;
+  const postFont = post.post_font_family || 'inherit';
 
   const handleLike = async () => {
     console.log('handleLike: Initiating like toggle for post ID:', post.id);
@@ -159,18 +183,28 @@ const PostCard = ({ post, onLikeSuccess, fetchStats, onCommentClick, canEdit, on
   const getMediaUrl = (url) => resolveMediaUrl(url);
 
   return (
-    <Card id={`post-${post.id}`}>
-      {canEdit && (
+    <Card id={`post-${post.id}`} $isHidden={isHidden}>
+      {(canEdit || canHide) && (
         <OwnerActions>
-          <OwnerButton onClick={() => onEdit && onEdit(post)}>Edit</OwnerButton>
-          <OwnerButton onClick={() => onDelete && onDelete(post)}>Delete</OwnerButton>
+          {canHide && (
+            <OwnerButton onClick={() => onToggleVisibility && onToggleVisibility(post)}>
+              {isHidden ? 'Unhide' : 'Hide'}
+            </OwnerButton>
+          )}
+          {canEdit && (
+            <>
+              <OwnerButton onClick={() => onEdit && onEdit(post)}>Edit</OwnerButton>
+              <OwnerButton onClick={() => onDelete && onDelete(post)}>Delete</OwnerButton>
+            </>
+          )}
         </OwnerActions>
       )}
+      {isHidden && <HiddenBadge>Hidden</HiddenBadge>}
       <AuthorInfo>
         <Avatar src={resolveMediaUrl(post.student_avatar)} alt={post.student_name} />
         <AuthorName>{post.student_name}</AuthorName>
       </AuthorInfo>
-      <PostTitle>{post.title}</PostTitle>
+      <PostTitle style={{ fontFamily: postFont }}>{post.title}</PostTitle>
       
       {post.media_url && (
         <PostMedia>
@@ -183,7 +217,7 @@ const PostCard = ({ post, onLikeSuccess, fetchStats, onCommentClick, canEdit, on
         </PostMedia>
       )}
 
-      <PostPreview>{post.content.substring(0, 150)}...</PostPreview>
+      <PostPreview style={{ fontFamily: postFont }}>{post.content.substring(0, 150)}...</PostPreview>
       <EngagementBar>
         <EngagementIcon onClick={handleLike}>
           <StyledFiHeart $isLiked={isLiked} /> {/* Use StyledFiHeart */}

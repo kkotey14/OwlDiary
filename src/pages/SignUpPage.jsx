@@ -19,11 +19,11 @@ const PasswordToggleButton = styled.span`
   top: 50%;
   transform: translateY(-50%);
   cursor: pointer;
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(15, 23, 42, 0.7);
   font-size: 1.1rem;
 
   &:hover {
-    color: #ffffff;
+    color: #0f172a;
   }
 `;
 
@@ -31,10 +31,11 @@ const PageWrapper = styled.div`
   min-height: 100vh;
   width: 100%;
   display: flex;
-  background: linear-gradient(180deg, #84fab0 0%, #8fd3f4 100%);
+  background: linear-gradient(135deg, #5fa9ff 0%, #ffffff 100%);
   font-family: 'Inter', sans-serif;
   overflow: hidden;
   position: relative;
+  color: #0f172a;
 `;
 
 const EditorialSection = styled.div`
@@ -51,7 +52,7 @@ const EditorialSection = styled.div`
 const DateDetail = styled.p`
   font-size: 0.7rem;
   font-weight: 400;
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(15, 23, 42, 0.7);
   letter-spacing: 2px;
   text-transform: uppercase;
   margin-bottom: 20px;
@@ -62,7 +63,7 @@ const WelcomeMessage = styled.h1`
   font-size: 5rem;
   font-weight: 700;
   line-height: 1.1;
-  color: #ffffff;
+  color: #0f172a;
   margin-left: -70px;
 `;
 
@@ -70,7 +71,7 @@ const FeaturedQuote = styled.blockquote`
   font-family: 'Georgia', serif;
   font-size: 1.1rem;
   font-style: italic;
-  color: rgba(255, 255, 255, 0.9);
+  color: rgba(15, 23, 42, 0.9);
   max-width: 300px;
   margin-top: 1.5rem;
   line-height: 1.5;
@@ -86,7 +87,7 @@ const FormSection = styled.div`
 
 const GlassForm = styled.form`
   background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(15px);
+  backdrop-filter: blur(20px);
   padding: 3rem 2.5rem;
   border-radius: 20px;
   width: 100%;
@@ -102,7 +103,7 @@ const Title = styled.h2`
   font-family: 'Playfair Display', serif;
   font-size: 2.2rem;
   font-weight: 700;
-  color: #ffffff;
+  color: #0f172a;
   text-align: center;
   margin-bottom: 1rem;
 `;
@@ -113,13 +114,13 @@ const Input = styled.input`
   border-radius: 12px;
   font-size: 1rem;
   background-color: transparent;
-  color: #ffffff;
+  color: #0f172a;
   transition: all 0.3s ease;
   box-sizing: border-box; /* Ensure consistent box model */
   width: 100%; /* Ensure all inputs take full width */
 
   &::placeholder {
-    color: rgba(255, 255, 255, 0.6);
+    color: rgba(15, 23, 42, 0.6);
   }
 
   &:focus {
@@ -131,18 +132,18 @@ const Input = styled.input`
 
 const GhostButton = styled.button`
   padding: 1rem;
-  border: 2px solid white;
+  border: 2px solid #0f172a;
   border-radius: 12px;
   background: transparent;
-  color: white;
+  color: #0f172a;
   font-size: 1.1rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
 
   &:hover {
-    background: white;
-    color: #84fab0;
+    background: #0f172a;
+    color: #ffffff;
   }
 
   &:disabled {
@@ -157,12 +158,12 @@ const LinksContainer = styled.div`
 `;
 
 const StyledLink = styled(Link)`
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(15, 23, 42, 0.8);
   text-decoration: none;
   font-size: 0.9rem;
 
   &:hover {
-    color: #ffffff;
+    color: #0f172a;
     text-decoration: underline;
   }
 `;
@@ -173,12 +174,60 @@ const ErrorMessage = styled.p`
   font-size: 0.9rem;
 `;
 
+const SuccessOverlay = styled.div`
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: 1rem;
+`;
+
+const SuccessModal = styled.div`
+  width: 100%;
+  max-width: 420px;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(95, 169, 255, 0.35);
+  border-radius: 18px;
+  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.25);
+  padding: 1.6rem;
+  text-align: center;
+`;
+
+const SuccessTitle = styled.h3`
+  font-family: 'Playfair Display', serif;
+  font-size: 1.8rem;
+  margin: 0 0 0.5rem 0;
+  color: #0f172a;
+`;
+
+const SuccessText = styled.p`
+  margin: 0 0 1.2rem 0;
+  color: rgba(15, 23, 42, 0.8);
+  font-size: 1rem;
+`;
+
+const SuccessButton = styled.button`
+  padding: 0.85rem 1.2rem;
+  border: none;
+  border-radius: 10px;
+  background: #0f172a;
+  color: #ffffff;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+`;
+
 const SignUpPage = () => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
+  const [showSuccessPopup, setShowSuccessPopup] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const navigate = useNavigate();
@@ -201,15 +250,22 @@ const SignUpPage = () => {
         body: JSON.stringify({ name, email, password }),
       });
 
-      const data = await response.json();
+      const raw = await response.text();
+      let data = {};
+      try {
+        data = raw ? JSON.parse(raw) : {};
+      } catch {
+        data = {};
+      }
 
       if (!response.ok) {
         throw new Error(data.error || 'Failed to sign up');
       }
 
-      navigate('/login');
+      setShowSuccessPopup(true);
     } catch (err) {
-      setError(err.message);
+      const isNetworkFailure = err instanceof TypeError;
+      setError(isNetworkFailure ? 'Cannot reach server. Ensure backend is running on port 5050.' : err.message);
     }
   };
 
@@ -218,8 +274,7 @@ const SignUpPage = () => {
   return (
     <PageWrapper>
       <EditorialSection>
-        <DateDetail>{formattedDate} // ISSUE NO. 1</DateDetail>
-        <WelcomeMessage>Start Your Story.</WelcomeMessage>
+        <WelcomeMessage>Start Your Story</WelcomeMessage>
         <FeaturedQuote>
           'The palest ink is better than the best memory.' — Chinese Proverb.
         </FeaturedQuote>
@@ -274,6 +329,23 @@ const SignUpPage = () => {
           </LinksContainer>
         </GlassForm>
       </FormSection>
+      {showSuccessPopup && (
+        <SuccessOverlay>
+          <SuccessModal>
+            <SuccessTitle>Account Created</SuccessTitle>
+            <SuccessText>Your account was created successfully.</SuccessText>
+            <SuccessButton
+              type="button"
+              onClick={() => {
+                setShowSuccessPopup(false);
+                navigate('/login');
+              }}
+            >
+              Continue to Login
+            </SuccessButton>
+          </SuccessModal>
+        </SuccessOverlay>
+      )}
     </PageWrapper>
   );
 };

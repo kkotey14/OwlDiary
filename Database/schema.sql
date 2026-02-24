@@ -6,6 +6,11 @@ CREATE TABLE IF NOT EXISTS students (
     password TEXT NOT NULL,
     about_me TEXT,
     avatar_url TEXT,
+    role TEXT DEFAULT 'user',
+    appearance_theme TEXT,
+    font_family TEXT,
+    accent_color TEXT,
+    font_size TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -17,6 +22,9 @@ CREATE TABLE IF NOT EXISTS posts (
     content TEXT NOT NULL,
     post_type TEXT NOT NULL CHECK(post_type IN ('text', 'image', 'video')),
     media_url TEXT, -- New column for media URL
+    is_hidden INTEGER DEFAULT 0,
+    display_order INTEGER,
+    post_font_family TEXT,
     likes INTEGER DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (student_id) REFERENCES students (id)
