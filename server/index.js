@@ -516,7 +516,7 @@ app.put('/api/posts/:id/visibility', authenticateToken, async (req, res) => {
 
     const updatedPost = await db.get(
       `SELECT 
-        p.id, p.title, p.content, p.post_type, p.likes, p.created_at, p.media_url, p.is_hidden, p.display_order, p.post_font_family,
+        p.id, p.student_id, p.title, p.content, p.post_type, p.likes, p.created_at, p.media_url, p.is_hidden, p.display_order, p.post_font_family,
         s.name as student_name, s.avatar_url as student_avatar,
         CASE WHEN EXISTS (SELECT 1 FROM likes WHERE user_id = ? AND post_id = p.id) THEN 1 ELSE 0 END AS isLiked,
         (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) AS comment_count
@@ -707,7 +707,7 @@ app.get('/api/posts', authenticateToken, async (req, res) => {
   try {
     const sql = `
       SELECT 
-        p.id, p.title, p.content, p.post_type, p.likes, p.created_at, p.media_url, p.is_hidden, p.display_order, p.post_font_family,
+        p.id, p.student_id, p.title, p.content, p.post_type, p.likes, p.created_at, p.media_url, p.is_hidden, p.display_order, p.post_font_family,
         s.name as student_name, s.avatar_url as student_avatar,
         CASE WHEN l.user_id IS NOT NULL THEN 1 ELSE 0 END AS isLiked,
         (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) AS comment_count
