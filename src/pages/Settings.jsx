@@ -1,6 +1,6 @@
 import React from "react";
-import { Link } from "react-router-dom";
 import styled from "styled-components";
+import { exportUserData } from "../utils/FetchData.js";
 
 //styles
 const SettingsPage = styled.div`
@@ -15,7 +15,6 @@ const SettingsPage = styled.div`
 const SettingsHeader = styled.div`
     display: flex;
     flex-direction: column;
-    align-items: flex-start;
     margin-bottom: 2rem;
 `;
 
@@ -33,7 +32,7 @@ const ActionButton = styled.button`
     border: none;
     border-radius: 8px;
     padding: 0.8rem 1.5rem;
-    font-size: 1rem;
+    font-size: 1.25rem;
     font-weight: 500;
     cursor: pointer;
     transition: background-color 0.3s;
@@ -45,14 +44,22 @@ const ActionButton = styled.button`
 
 const ButtonContainer = styled.div`
     margin-top: 2rem;
-    width: 100%;
-    text-align: center;
+    display: flex;
+    justify-content: flex-start;
 `;
 
 //page component
 const Settings = () => {
-    const handleExportData = () => {
-        console.log("Exporting data...");
+    const [exporting, setExporting] = React.useState(false);
+
+    const handleExportData = async () => {
+        const confirmed = confirm(
+            "This will download all your posts and comments as a JSON file. Continue?",
+        );
+        if (!confirmed) return;
+        setExporting(true);
+        await exportUserData();
+        setExporting(false);
     };
 
     const handleAccountSettings = () => {
@@ -83,11 +90,13 @@ const Settings = () => {
                 <ButtonContainer>
                     <ActionButton
                         onClick={handleExportData}
+                        disabled={exporting}
                         title="Export your profile data and posts to a JSON file.">
-                        Export Data
+                        {exporting ? "Exporting..." : "Export Data"}
                     </ActionButton>
+                </ButtonContainer>
+                <ButtonContainer>
                     <ActionButton
-                        style={{ marginLeft: "1rem" }}
                         onClick={handleAccountSettings}
                         title="Navigate to the SCSU account settings page.">
                         Account Settings
