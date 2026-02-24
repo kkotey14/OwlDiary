@@ -51,6 +51,9 @@ async function ensureStudentColumns() {
         const columns = await db.all('PRAGMA table_info(students)');
         const existing = new Set(columns.map((col) => col.name));
 
+        if (!existing.has('role')) {
+            await db.run('ALTER TABLE students ADD COLUMN role TEXT DEFAULT \'user\'');
+        }
         if (!existing.has('appearance_theme')) {
             await db.run('ALTER TABLE students ADD COLUMN appearance_theme TEXT');
         }
@@ -66,6 +69,42 @@ async function ensureStudentColumns() {
         }
     } catch (error) {
         console.error('Error ensuring student appearance columns', error.message);
+    }
+}
+
+async function ensureAdminAccount() {
+    const adminEmail = process.env.ADMIN_EMAIL;
+    const adminPassword = process.env.ADMIN_PASSWORD;
+    const adminName = process.env.ADMIN_NAME || 'Admin';
+
+    if (!adminEmail || !adminPassword) {
+        return;
+    }
+
+    try {
+        const existingAdmin = await db.get('SELECT id FROM students WHERE role = ?', ['admin']);
+        const existingByEmail = await db.get('SELECT id, role FROM students WHERE email = ?', [adminEmail]);
+
+        if (existingByEmail) {
+            if (existingByEmail.role !== 'admin') {
+                await db.run('UPDATE students SET role = ? WHERE id = ?', ['admin', existingByEmail.id]);
+            }
+            return;
+        }
+
+        if (existingAdmin) {
+            return;
+        }
+
+        const hashedPassword = await bcrypt.hash(adminPassword, 10);
+        const avatar_url = `https://ui-avatars.com/api/?name=${encodeURIComponent(adminName)}&background=random`;
+        const about_me = 'Administrator account';
+        await db.run(
+            'INSERT INTO students (name, email, password, avatar_url, about_me, role) VALUES (?, ?, ?, ?, ?, ?)',
+            [adminName, adminEmail, hashedPassword, avatar_url, about_me, 'admin']
+        );
+    } catch (error) {
+        console.error('Error ensuring admin account', error.message);
     }
 }
 
@@ -98,63 +137,68 @@ function initializeDatabase() {
             console.log('Database schema initialized successfully.');
             await ensureStudentColumns();
             await ensurePostColumns();
+            await ensureAdminAccount();
             seedDatabase();
         }
     });
 }
 
 async function seedDatabase() {
-    const checkStudentsSql = 'SELECT COUNT(*) AS count FROM students';
-    db.get(checkStudentsSql, async (err, row) => {
-        if (err) {
-            console.error('Error checking students table', err.message);
+    try {
+        const checkStudentsSql = 'SELECT COUNT(*) AS count FROM students';
+        const row = await db.get(checkStudentsSql);
+        const count = row?.count ?? 0;
+
+        console.log('Current student count:', count);
+        if (count !== 0) {
+            console.log('Database already contains data.');
             return;
         }
 
-        console.log('Current student count:', row.count); // Added console log
-        if (row.count === 0) {
-            console.log('Seeding initial student and post data...');
-            
-            const saltRounds = 10;
-            const students = [
-                {
-                    name: 'Admin User',
-                    email: 'admin@test.com',
-                    password: 'password123',
-                    about: 'I am the admin.',
-                    avatar: 'https://i.pravatar.cc/150?img=1'
-                },
-                {
-                    name: 'Mike Example',
-                    email: 'mike@example.com',
-                    password: 'password456',
-                    about: 'Just a regular user.',
-                    avatar: 'https://i.pravatar.cc/150?img=2'
-                }
-            ];
+        console.log('Seeding initial student and post data...');
 
-            const insertStudent = db.prepare('INSERT INTO students (name, email, password, about_me, avatar_url) VALUES (?, ?, ?, ?, ?)');
-            
-            for (const s of students) {
-                const hashedPassword = await bcrypt.hash(s.password, saltRounds);
-                insertStudent.run(s.name, s.email, hashedPassword, s.about, s.avatar);
+        const saltRounds = 10;
+        const students = [
+            {
+                name: 'Admin User',
+                email: 'admin@test.com',
+                password: 'password123',
+                about: 'I am the admin.',
+                avatar: 'https://i.pravatar.cc/150?img=1'
+            },
+            {
+                name: 'Mike Example',
+                email: 'mike@example.com',
+                password: 'password456',
+                about: 'Just a regular user.',
+                avatar: 'https://i.pravatar.cc/150?img=2'
             }
-            
-            insertStudent.finalize();
+        ];
 
-            const insertPost = db.prepare('INSERT INTO posts (student_id, title, content, post_type) VALUES (?, ?, ?, ?)');
-            const posts = [
-                { student_id: 1, title: 'Admin Post', content: 'This is a post from the admin.', type: 'text' },
-                { student_id: 2, title: 'Mike\'s Musings', content: 'Hello world!', type: 'text' },
-            ];
-            posts.forEach(p => insertPost.run(p.student_id, p.title, p.content, p.type));
-            insertPost.finalize(err => {
-                 if (!err) console.log('Database seeded.');
-            });
-        } else {
-            console.log('Database already contains data.');
+        for (const s of students) {
+            const hashedPassword = await bcrypt.hash(s.password, saltRounds);
+            await db.run(
+                'INSERT INTO students (name, email, password, about_me, avatar_url) VALUES (?, ?, ?, ?, ?)',
+                [s.name, s.email, hashedPassword, s.about, s.avatar]
+            );
         }
-    });
+
+        const posts = [
+            { student_id: 1, title: 'Admin Post', content: 'This is a post from the admin.', type: 'text' },
+            { student_id: 2, title: 'Mike\'s Musings', content: 'Hello world!', type: 'text' },
+        ];
+
+        for (const p of posts) {
+            await db.run(
+                'INSERT INTO posts (student_id, title, content, post_type) VALUES (?, ?, ?, ?)',
+                [p.student_id, p.title, p.content, p.type]
+            );
+        }
+
+        console.log('Database seeded.');
+    } catch (error) {
+        console.error('Error while seeding database', error.message);
+    }
 }
 
 
@@ -278,7 +322,7 @@ app.post('/api/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials.' });
     }
 
-    const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, {
+    const token = jwt.sign({ id: user.id, email: user.email, role: user.role || 'user' }, JWT_SECRET, {
       expiresIn: '1h',
     });
     console.log('Login route: User authenticated, sending token.');
@@ -451,6 +495,7 @@ app.put('/api/posts/:id/visibility', authenticateToken, async (req, res) => {
   const { id: postId } = req.params;
   const { is_hidden } = req.body;
   const userId = req.user.id;
+  let isAdmin = req.user && req.user.role === 'admin';
   const hiddenValue =
     is_hidden === true || is_hidden === 1 || is_hidden === '1' || is_hidden === 'true' ? 1 : 0;
 
@@ -459,7 +504,11 @@ app.put('/api/posts/:id/visibility', authenticateToken, async (req, res) => {
     if (!existingPost) {
       return res.status(404).json({ message: 'Post not found.' });
     }
-    if (existingPost.student_id !== userId) {
+    if (!isAdmin) {
+      const roleRow = await db.get('SELECT role FROM students WHERE id = ?', [userId]);
+      isAdmin = roleRow && roleRow.role === 'admin';
+    }
+    if (!isAdmin && existingPost.student_id !== userId) {
       return res.status(403).json({ message: 'Forbidden: You can only hide your own posts.' });
     }
 
@@ -708,7 +757,7 @@ app.get('/api/students/:id/posts', async (req, res) => {
     try {
       const decoded = jwt.verify(token, JWT_SECRET);
       requesterId = decoded.id;
-    } catch (err) {
+    } catch {
       requesterId = null;
     }
   }

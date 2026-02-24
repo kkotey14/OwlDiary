@@ -192,6 +192,7 @@ const Profile = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isOwner, setIsOwner] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
   const [profileName, setProfileName] = useState('');
   const [profileBio, setProfileBio] = useState('');
@@ -545,11 +546,14 @@ const Profile = () => {
           try {
             const decoded = jwtDecode(token);
             setIsOwner(String(decoded.id) === String(studentId));
+            setIsAdmin(decoded.role === 'admin');
           } catch (err) {
             setIsOwner(false);
+            setIsAdmin(false);
           }
         } else {
           setIsOwner(false);
+          setIsAdmin(false);
         }
       } catch (error) {
         setError(error.message);
@@ -837,6 +841,7 @@ const Profile = () => {
             <PostCard
               post={post}
               canEdit={isOwner}
+              canHide={isOwner || isAdmin}
               onEdit={handleEditPost}
               onDelete={handleDeletePost}
               onToggleVisibility={handleTogglePostVisibility}

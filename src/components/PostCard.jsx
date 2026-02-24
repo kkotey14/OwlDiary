@@ -123,6 +123,7 @@ const PostCard = ({
   fetchStats,
   onCommentClick,
   canEdit,
+  canHide,
   onEdit,
   onDelete,
   onToggleVisibility,
@@ -183,13 +184,19 @@ const PostCard = ({
 
   return (
     <Card id={`post-${post.id}`} $isHidden={isHidden}>
-      {canEdit && (
+      {(canEdit || canHide) && (
         <OwnerActions>
-          <OwnerButton onClick={() => onToggleVisibility && onToggleVisibility(post)}>
-            {isHidden ? 'Unhide' : 'Hide'}
-          </OwnerButton>
-          <OwnerButton onClick={() => onEdit && onEdit(post)}>Edit</OwnerButton>
-          <OwnerButton onClick={() => onDelete && onDelete(post)}>Delete</OwnerButton>
+          {canHide && (
+            <OwnerButton onClick={() => onToggleVisibility && onToggleVisibility(post)}>
+              {isHidden ? 'Unhide' : 'Hide'}
+            </OwnerButton>
+          )}
+          {canEdit && (
+            <>
+              <OwnerButton onClick={() => onEdit && onEdit(post)}>Edit</OwnerButton>
+              <OwnerButton onClick={() => onDelete && onDelete(post)}>Delete</OwnerButton>
+            </>
+          )}
         </OwnerActions>
       )}
       {isHidden && <HiddenBadge>Hidden</HiddenBadge>}

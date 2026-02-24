@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS students (
     password TEXT NOT NULL,
     about_me TEXT,
     avatar_url TEXT,
+    role TEXT DEFAULT 'user',
     appearance_theme TEXT,
     font_family TEXT,
     accent_color TEXT,

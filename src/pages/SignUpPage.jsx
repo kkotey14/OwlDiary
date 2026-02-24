@@ -35,6 +35,7 @@ const PageWrapper = styled.div`
   font-family: 'Inter', sans-serif;
   overflow: hidden;
   position: relative;
+  color: #0f172a;
 `;
 
 const EditorialSection = styled.div`
@@ -86,7 +87,7 @@ const FormSection = styled.div`
 
 const GlassForm = styled.form`
   background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(15px);
+  backdrop-filter: blur(20px);
   padding: 3rem 2.5rem;
   border-radius: 20px;
   width: 100%;
@@ -173,12 +174,60 @@ const ErrorMessage = styled.p`
   font-size: 0.9rem;
 `;
 
+const SuccessOverlay = styled.div`
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: 1rem;
+`;
+
+const SuccessModal = styled.div`
+  width: 100%;
+  max-width: 420px;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(95, 169, 255, 0.35);
+  border-radius: 18px;
+  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.25);
+  padding: 1.6rem;
+  text-align: center;
+`;
+
+const SuccessTitle = styled.h3`
+  font-family: 'Playfair Display', serif;
+  font-size: 1.8rem;
+  margin: 0 0 0.5rem 0;
+  color: #0f172a;
+`;
+
+const SuccessText = styled.p`
+  margin: 0 0 1.2rem 0;
+  color: rgba(15, 23, 42, 0.8);
+  font-size: 1rem;
+`;
+
+const SuccessButton = styled.button`
+  padding: 0.85rem 1.2rem;
+  border: none;
+  border-radius: 10px;
+  background: #0f172a;
+  color: #ffffff;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+`;
+
 const SignUpPage = () => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
+  const [showSuccessPopup, setShowSuccessPopup] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const navigate = useNavigate();
@@ -201,15 +250,22 @@ const SignUpPage = () => {
         body: JSON.stringify({ name, email, password }),
       });
 
-      const data = await response.json();
+      const raw = await response.text();
+      let data = {};
+      try {
+        data = raw ? JSON.parse(raw) : {};
+      } catch {
+        data = {};
+      }
 
       if (!response.ok) {
         throw new Error(data.error || 'Failed to sign up');
       }
 
-      navigate('/login');
+      setShowSuccessPopup(true);
     } catch (err) {
-      setError(err.message);
+      const isNetworkFailure = err instanceof TypeError;
+      setError(isNetworkFailure ? 'Cannot reach server. Ensure backend is running on port 5050.' : err.message);
     }
   };
 
@@ -273,6 +329,23 @@ const SignUpPage = () => {
           </LinksContainer>
         </GlassForm>
       </FormSection>
+      {showSuccessPopup && (
+        <SuccessOverlay>
+          <SuccessModal>
+            <SuccessTitle>Account Created</SuccessTitle>
+            <SuccessText>Your account was created successfully.</SuccessText>
+            <SuccessButton
+              type="button"
+              onClick={() => {
+                setShowSuccessPopup(false);
+                navigate('/login');
+              }}
+            >
+              Continue to Login
+            </SuccessButton>
+          </SuccessModal>
+        </SuccessOverlay>
+      )}
     </PageWrapper>
   );
 };
