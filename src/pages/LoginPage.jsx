@@ -197,7 +197,7 @@ const LoginPage = () => {
         try {
           const errorData = await response.json();
           errorMessage = errorData.error || errorMessage;
-        } catch (jsonError) {
+        } catch {
           const errorText = await response.text();
           errorMessage = `API error: ${response.status} - ${errorText || errorMessage}`;
         }
@@ -208,7 +208,8 @@ const LoginPage = () => {
         throw new Error(errorMessage);
       }
     } catch (error) {
-      setError(error.message);
+      const isNetworkFailure = error instanceof TypeError;
+      setError(isNetworkFailure ? 'Cannot reach server. Ensure backend is running on port 5050.' : error.message);
     }
   };
 
