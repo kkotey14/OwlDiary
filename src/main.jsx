@@ -8,6 +8,7 @@ import "./index.css";
 import Dashboard from "./pages/Dashboard.jsx";
 import Directory from "./pages/Directory.jsx";
 import Profile from "./pages/Profile.jsx";
+import PostPage from "./pages/PostPage.jsx";
 import LoginPage from "./pages/LoginPage.jsx";
 import SignUpPage from "./pages/SignUpPage.jsx";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage.jsx";
@@ -50,6 +51,10 @@ const router = createBrowserRouter([
             {
                 path: "settings",
                 element: <Settings />,
+            },
+            {
+                path: "post/:postId",
+                element: <PostPage />,
             },
         ],
     },

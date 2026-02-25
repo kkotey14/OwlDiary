@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import styled from 'styled-components';
 import { FiHeart, FiMessageSquare } from 'react-icons/fi';
 import { resolveMediaUrl } from '../utils/media';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { getAuthTokenOrLogout, handleAuthFailure } from '../utils/auth';
 
 const Card = styled.div`
@@ -204,7 +204,9 @@ const PostCard = ({
         <Avatar src={resolveMediaUrl(post.student_avatar)} alt={post.student_name} />
         <AuthorName>{post.student_name}</AuthorName>
       </AuthorInfo>
-      <PostTitle style={{ fontFamily: postFont }}>{post.title}</PostTitle>
+      <Link to={`/post/${post.id}`} style={{ textDecoration: 'none' }}>
+        <PostTitle style={{ fontFamily: postFont }}>{post.title}</PostTitle>
+      </Link>
       
       {post.media_url && (
         <PostMedia>
