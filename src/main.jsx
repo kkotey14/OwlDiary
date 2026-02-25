@@ -10,6 +10,7 @@ import Directory from "./pages/Directory.jsx";
 import Profile from "./pages/Profile.jsx";
 import LoginPage from "./pages/LoginPage.jsx";
 import SignUpPage from "./pages/SignUpPage.jsx";
+import PostPage from "./pages/PostPage.jsx";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage.jsx";
 import Settings from "./pages/Settings.jsx";
 const Notifications = () => <h1>Notifications Page</h1>;
@@ -50,6 +51,10 @@ const router = createBrowserRouter([
             {
                 path: "settings",
                 element: <Settings />,
+            },
+            {
+            path: "post/:postId",
+            element: <PostPage />,
             },
         ],
     },
