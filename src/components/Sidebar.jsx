@@ -8,6 +8,7 @@ import NotificationDropdown from './NotificationDropdown';
 
 const SidebarContainer = styled.aside`
   width: 90px;
+  flex-shrink: 0;
   background: linear-gradient(135deg, #5fa9ff 0%, #ffffff 100%);
   padding: 2.5rem 0;
   display: flex;

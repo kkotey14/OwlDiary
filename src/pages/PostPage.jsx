@@ -11,11 +11,15 @@ import { jwtDecode } from 'jwt-decode';
 
 
 const PageWrapper = styled.div`
-  max-width: 760px;
-  margin: 0 auto;
+  min-height: 100vh;
+  width: calc(100% + 5rem);
+  margin: -2.5rem;
+  padding: 2.5rem;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 2rem;
+  background: #f7f9fc;
 `;
 
 
