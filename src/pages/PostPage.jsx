@@ -384,7 +384,15 @@ const PostPage = () => {
     fetchAll();
   }, [postId]);
 
-
+  useEffect(() => {
+  if (loading) return;
+  if (window.location.hash === '#comments') {
+    const el = document.getElementById('comments');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth' });
+    }
+  }
+}, [loading]);
   const handleLike = async () => {
     const token = getAuthTokenOrLogout(navigate);
     if (!token) return;
@@ -520,7 +528,7 @@ const PostPage = () => {
       </PostCard>
 
 
-      <CommentsSection>
+      <CommentsSection id="comments">
         <SectionTitle>Comments ({comments.length})</SectionTitle>
 
 

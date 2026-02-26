@@ -224,7 +224,11 @@ const PostCard = ({
           <StyledFiHeart $isLiked={isLiked} /> {/* Use StyledFiHeart */}
           <span>{currentLikes}</span>
         </EngagementIcon>
-        <EngagementIcon onClick={() => canComment && onCommentClick(post.id)}>
+        <EngagementIcon onClick={(e) => {
+          e.preventDefault();
+          if (canComment) onCommentClick(post.id);
+          navigate(`/post/${post.id}#comments`);
+        }}>
           <FiMessageSquare />
           <span>{post.comment_count || 0}</span>
         </EngagementIcon>
