@@ -5,7 +5,7 @@ import { resolveMediaUrl } from '../utils/media';
 import { useNavigate, Link } from 'react-router-dom';
 import { getAuthTokenOrLogout, handleAuthFailure } from '../utils/auth';
 
-const Card = styled.div`
+const Card = styled(Link)`
   background: white; /* Changed from var(--card-background) to white for consistency */
   border-radius: 16px;
   padding: 1.5rem;
@@ -183,7 +183,7 @@ const PostCard = ({
   const getMediaUrl = (url) => resolveMediaUrl(url);
 
   return (
-    <Card id={`post-${post.id}`} $isHidden={isHidden}>
+    <Card to={`/post/${post.id}`} id={`post-${post.id}`} $isHidden={isHidden}>
       {(canEdit || canHide) && (
         <OwnerActions>
           {canHide && (
@@ -204,9 +204,8 @@ const PostCard = ({
         <Avatar src={resolveMediaUrl(post.student_avatar)} alt={post.student_name} />
         <AuthorName>{post.student_name}</AuthorName>
       </AuthorInfo>
-      <Link to={`/post/${post.id}`} style={{ textDecoration: 'none' }}>
-        <PostTitle style={{ fontFamily: postFont }}>{post.title}</PostTitle>
-      </Link>
+      <PostTitle style={{ fontFamily: postFont }}>{post.title}</PostTitle>
+      
       
       {post.media_url && (
         <PostMedia>
