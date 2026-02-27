@@ -978,6 +978,35 @@ app.get("/api/export", authenticateToken, async (req, res) => {
     }
 });
 
+app.get("/api/posts/:id", authenticateToken, async (req, res) => {
+    const { id: postId } = req.params;
+    const userId = req.user.id;
+
+    try {
+        const post = await db.get(
+            `SELECT 
+        p.id, p.student_id, p.title, p.content, p.post_type, p.likes, p.created_at, p.media_url,
+        p.is_hidden, p.display_order, p.post_font_family,
+        s.name as student_name, s.avatar_url as student_avatar,
+        CASE WHEN EXISTS (SELECT 1 FROM likes WHERE user_id = ? AND post_id = p.id) THEN 1 ELSE 0 END AS isLiked,
+        (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) AS comment_count
+       FROM posts p
+       JOIN students s ON p.student_id = s.id
+       WHERE p.id = ?`,
+            [userId, postId]
+        );
+
+        if (!post) {
+            return res.status(404).json({ message: "Post not found." });
+        }
+
+        return res.json(post);
+    } catch (error) {
+        console.error("Error fetching post:", error);
+        return res.status(500).json({ message: "Error fetching post." });
+    }
+});
+
 app.get("/api/posts", authenticateToken, async (req, res) => {
     if (!req.user) {
         console.error("API /posts: Unauthorized - User not authenticated.");
@@ -1008,6 +1037,35 @@ app.get("/api/posts", authenticateToken, async (req, res) => {
             .status(500)
             .json({ message: "Server error while fetching posts." });
     }
+});
+
+app.get('/api/posts/:id', authenticateToken, async (req, res) => {
+  const { id: postId } = req.params;
+  const userId = req.user.id;
+
+  try {
+    const post = await db.get(
+      `SELECT 
+        p.id, p.student_id, p.title, p.content, p.post_type, p.likes, p.created_at, p.media_url,
+        p.is_hidden, p.display_order, p.post_font_family,
+        s.name as student_name, s.avatar_url as student_avatar,
+        CASE WHEN EXISTS (SELECT 1 FROM likes WHERE user_id = ? AND post_id = p.id) THEN 1 ELSE 0 END AS isLiked,
+        (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) AS comment_count
+       FROM posts p
+       JOIN students s ON p.student_id = s.id
+       WHERE p.id = ?`,
+      [userId, postId]
+    );
+
+    if (!post) {
+      return res.status(404).json({ message: 'Post not found.' });
+    }
+
+    return res.json(post);
+  } catch (error) {
+    console.error('Error fetching post:', error);
+    return res.status(500).json({ message: 'Error fetching post.' });
+  }
 });
 
 // Student directory routes

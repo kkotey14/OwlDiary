@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import styled from 'styled-components';
 import { FiHeart, FiMessageSquare } from 'react-icons/fi';
 import { resolveMediaUrl } from '../utils/media';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { getAuthTokenOrLogout, handleAuthFailure } from '../utils/auth';
 
 const Card = styled.div`
@@ -55,6 +55,11 @@ const PostTitle = styled.h3`
   font-size: 1.25rem;
   font-weight: 700;
   color: #2c3e50; /* Changed from var(--text-primary) to hex code */
+`;
+
+const PostTitleLink = styled(Link)`
+  text-decoration: none;
+  color: inherit;
 `;
 
 const PostMedia = styled.div`
@@ -226,7 +231,9 @@ const PostCard = ({
           </OwnerActions>
         )}
       </HeaderRow>
-      <PostTitle style={{ fontFamily: postFont }}>{post.title}</PostTitle>
+      <PostTitleLink to={`/post/${post.id}`}>
+        <PostTitle style={{ fontFamily: postFont }}>{post.title}</PostTitle>
+      </PostTitleLink>
       
       {post.media_url && (
         <PostMedia>
