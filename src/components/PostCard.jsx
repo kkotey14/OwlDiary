@@ -16,10 +16,25 @@ const Card = styled.div`
   opacity: ${(props) => (props.$isHidden ? 0.6 : 1)};
 `;
 
+const HeaderRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+`;
+
 const AuthorInfo = styled.div`
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  min-width: 0;
+`;
+
+const AuthorMeta = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
 `;
 
 const Avatar = styled.img`
@@ -31,6 +46,9 @@ const Avatar = styled.img`
 const AuthorName = styled.span`
   font-weight: 500;
   color: #2c3e50; /* Changed from var(--text-primary) to hex code */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 `;
 
 const PostTitle = styled.h3`
@@ -84,6 +102,7 @@ const OwnerActions = styled.div`
   display: flex;
   gap: 0.5rem;
   justify-content: flex-end;
+  margin-left: auto;
 `;
 
 const OwnerButton = styled.button`
@@ -108,12 +127,11 @@ const HiddenBadge = styled.span`
   background: #fef3c7;
   border-radius: 999px;
   padding: 0.2rem 0.6rem;
-  align-self: flex-start;
 `;
 
 
 const StyledFiHeart = styled(FiHeart)`
-  color: ${props => props.$isLiked ? 'red' : '#888'};
+  color: ${(props) => (props.$isLiked ? 'red' : 'currentColor')};
   transition: color 0.3s;
 `;
 
@@ -184,26 +202,30 @@ const PostCard = ({
 
   return (
     <Card id={`post-${post.id}`} $isHidden={isHidden}>
-      {(canEdit || canHide) && (
-        <OwnerActions>
-          {canHide && (
-            <OwnerButton onClick={() => onToggleVisibility && onToggleVisibility(post)}>
-              {isHidden ? 'Unhide' : 'Hide'}
-            </OwnerButton>
-          )}
-          {canEdit && (
-            <>
-              <OwnerButton onClick={() => onEdit && onEdit(post)}>Edit</OwnerButton>
-              <OwnerButton onClick={() => onDelete && onDelete(post)}>Delete</OwnerButton>
-            </>
-          )}
-        </OwnerActions>
-      )}
-      {isHidden && <HiddenBadge>Hidden</HiddenBadge>}
-      <AuthorInfo>
-        <Avatar src={resolveMediaUrl(post.student_avatar)} alt={post.student_name} />
-        <AuthorName>{post.student_name}</AuthorName>
-      </AuthorInfo>
+      <HeaderRow>
+        <AuthorInfo>
+          <Avatar src={resolveMediaUrl(post.student_avatar)} alt={post.student_name} />
+          <AuthorMeta>
+            <AuthorName>{post.student_name}</AuthorName>
+            {isHidden && <HiddenBadge>Hidden</HiddenBadge>}
+          </AuthorMeta>
+        </AuthorInfo>
+        {(canEdit || canHide) && (
+          <OwnerActions>
+            {canHide && (
+              <OwnerButton onClick={() => onToggleVisibility && onToggleVisibility(post)}>
+                {isHidden ? 'Unhide' : 'Hide'}
+              </OwnerButton>
+            )}
+            {canEdit && (
+              <>
+                <OwnerButton onClick={() => onEdit && onEdit(post)}>Edit</OwnerButton>
+                <OwnerButton onClick={() => onDelete && onDelete(post)}>Delete</OwnerButton>
+              </>
+            )}
+          </OwnerActions>
+        )}
+      </HeaderRow>
       <PostTitle style={{ fontFamily: postFont }}>{post.title}</PostTitle>
       
       {post.media_url && (

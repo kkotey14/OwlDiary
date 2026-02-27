@@ -71,6 +71,11 @@ async function ensureStudentColumns() {
         if (!existing.has("font_size")) {
             await db.run("ALTER TABLE students ADD COLUMN font_size TEXT");
         }
+        if (!existing.has("profile_background_url")) {
+            await db.run(
+                "ALTER TABLE students ADD COLUMN profile_background_url TEXT",
+            );
+        }
     } catch (error) {
         console.error(
             "Error ensuring student appearance columns",
@@ -282,6 +287,26 @@ const avatarUpload = multer({
             cb(null, true);
         } else {
             cb(new Error("Only image files are allowed for avatars."), false);
+        }
+    },
+});
+const galleryStorage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, path.join(__dirname, "uploads"));
+    },
+    filename: function (req, file, cb) {
+        const userId = req.user ? req.user.id : "unknown";
+        const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
+        cb(null, `gallery-${userId}-${Date.now()}-${safeName}`);
+    },
+});
+const galleryUpload = multer({
+    storage: galleryStorage,
+    fileFilter: (req, file, cb) => {
+        if (file.mimetype.startsWith("image/")) {
+            cb(null, true);
+        } else {
+            cb(new Error("Only image files are allowed for gallery uploads."), false);
         }
     },
 });
@@ -797,7 +822,10 @@ app.post("/api/posts/:id/comments", authenticateToken, async (req, res) => {
 app.put(
     "/api/profile",
     authenticateToken,
-    avatarUpload.single("avatar"),
+    avatarUpload.fields([
+        { name: "avatar", maxCount: 1 },
+        { name: "profile_background", maxCount: 1 },
+    ]),
     async (req, res) => {
         const {
             about_me,
@@ -808,7 +836,12 @@ app.put(
             font_size,
         } = req.body;
         const userId = req.user.id;
-        const avatar_url = req.file ? `/uploads/${req.file.filename}` : null;
+        const avatarFile = req.files?.avatar?.[0];
+        const backgroundFile = req.files?.profile_background?.[0];
+        const avatar_url = avatarFile ? `/uploads/${avatarFile.filename}` : null;
+        const profile_background_url = backgroundFile
+            ? `/uploads/${backgroundFile.filename}`
+            : null;
 
         const updates = [];
         const params = [];
@@ -841,6 +874,10 @@ app.put(
             updates.push("avatar_url = ?");
             params.push(avatar_url);
         }
+        if (profile_background_url) {
+            updates.push("profile_background_url = ?");
+            params.push(profile_background_url);
+        }
 
         if (updates.length === 0) {
             return res
@@ -856,7 +893,7 @@ app.put(
             );
 
             const updatedUser = await db.get(
-                "SELECT id, name, email, about_me, avatar_url, appearance_theme, font_family, accent_color, font_size FROM students WHERE id = ?",
+                "SELECT id, name, email, about_me, avatar_url, appearance_theme, font_family, accent_color, font_size, profile_background_url FROM students WHERE id = ?",
                 [userId],
             );
 
@@ -976,7 +1013,15 @@ app.get("/api/posts", authenticateToken, async (req, res) => {
 // Student directory routes
 app.get("/api/students", async (req, res) => {
     try {
-        const rows = await db.all("SELECT * FROM students ORDER BY name");
+        const rows = await db.all(
+            `SELECT
+              s.*,
+              MAX(p.created_at) AS latest_post_at
+            FROM students s
+            LEFT JOIN posts p ON p.student_id = s.id AND p.is_hidden = 0
+            GROUP BY s.id
+            ORDER BY s.name`,
+        );
         return res.json(rows);
     } catch (error) {
         return res.status(500).json({ error: error.message });
@@ -995,6 +1040,46 @@ app.get("/api/students/:id", async (req, res) => {
         return res.status(500).json({ error: error.message });
     }
 });
+
+app.get("/api/students/:id/gallery", async (req, res) => {
+    const { id } = req.params;
+    try {
+        const rows = await db.all(
+            "SELECT id, student_id, photo_url, created_at FROM profile_gallery WHERE student_id = ? ORDER BY created_at DESC, id DESC",
+            [id],
+        );
+        return res.json(rows);
+    } catch (error) {
+        return res.status(500).json({ error: error.message });
+    }
+});
+
+app.post(
+    "/api/profile/gallery",
+    authenticateToken,
+    galleryUpload.single("photo"),
+    async (req, res) => {
+        const userId = req.user.id;
+        if (!req.file) {
+            return res.status(400).json({ error: "Photo file is required." });
+        }
+
+        try {
+            const photoUrl = `/uploads/${req.file.filename}`;
+            const result = await db.run(
+                "INSERT INTO profile_gallery (student_id, photo_url) VALUES (?, ?)",
+                [userId, photoUrl],
+            );
+            const photo = await db.get(
+                "SELECT id, student_id, photo_url, created_at FROM profile_gallery WHERE id = ?",
+                [result.lastID],
+            );
+            return res.status(201).json(photo);
+        } catch (error) {
+            return res.status(500).json({ error: error.message });
+        }
+    },
+);
 
 app.get("/api/students/:id/posts", async (req, res) => {
     const { id } = req.params;
