@@ -32,6 +32,33 @@ A brief paragraph explaining what this project does and its purpose.
 - **Mac/Linux:** Run `./start-admin.sh` and follow the prompts.
 - **Windows:** Run `start-admin.bat` and follow the prompts.
 
+## Recent Updates
+- **Auth + API reliability**
+  - Fixed signup/login flow error handling for proxy/network failures.
+  - Improved client-side parsing so empty/non-JSON responses no longer crash auth pages.
+  - Added clearer user-facing messaging when backend is unreachable.
+- **Post visibility controls**
+  - Enabled hide/unhide controls from both profile and dashboard contexts.
+  - Kept role-aware behavior: owners can hide their own posts; admins can hide any post.
+  - Updated post payloads to include `student_id` so frontend permission checks are accurate.
+- **Profile auto-refresh**
+  - Profile posts now refresh immediately after creating a new post without manual page reload.
+  - Removed disruptive full-page loading flashes during post refreshes.
+- **Profile hero + gallery**
+  - Upgraded profile header into a full-width hero section.
+  - Added gallery upload and viewer support (thumbnail strip + click-to-view + navigation).
+  - Gallery uploads no longer change profile background automatically.
+  - Added dedicated profile background upload in Edit Profile.
+  - Tuned background readability with a subtle blue overlay above hero images.
+  - Made gallery panel colors follow the selected profile theme.
+- **Directory activity indicator**
+  - Replaced demo red-dot logic with real unseen-post logic.
+  - Dot now clears after viewing a student profile and reappears only when new posts exist.
+- **UI polish**
+  - Aligned post card header layout so avatar, name, and actions share one line.
+  - Fixed like hover color behavior to match comment hover behavior.
+  - Ensured sidebar tooltip labels render above surrounding UI layers.
+
 ## Development Workflow
 - **Branching Strategy**: Create feature branches from `main` (e.g., `feature/login-page`).
 - **Commits**: Use descriptive commit messages.

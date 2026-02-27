@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import styled from 'styled-components';
+import { jwtDecode } from 'jwt-decode';
 import ProfileCard from '../components/ProfileCard';
 
 const DirectoryHeader = styled.div`
@@ -62,6 +63,16 @@ const Directory = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [query, setQuery] = useState('');
+  const viewerId = useMemo(() => {
+    const token = localStorage.getItem('token');
+    if (!token) return null;
+    try {
+      const decoded = jwtDecode(token);
+      return decoded?.id ?? null;
+    } catch {
+      return null;
+    }
+  }, []);
 
   useEffect(() => {
     const fetchStudents = async () => {
@@ -136,9 +147,9 @@ const Directory = () => {
       {filteredStudents.length === 0 ? (
         <EmptyState>No students found. Try clearing the search.</EmptyState>
       ) : (
-        <DirectoryContainer>
+          <DirectoryContainer>
           {filteredStudents.map((student) => (
-            <ProfileCard key={student.id} student={student} />
+            <ProfileCard key={student.id} student={student} viewerId={viewerId} />
           ))}
         </DirectoryContainer>
       )}

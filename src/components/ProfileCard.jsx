@@ -61,14 +61,28 @@ const NotificationIndicator = styled.div`
   border: 2px solid white;
 `;
 
-const ProfileCard = ({ student }) => {
-  // Static notification for demonstration
-  const hasNewActivity = student.id % 2 === 0;
+const ProfileCard = ({ student, viewerId }) => {
+  const latestPostAt = student.latest_post_at;
+  const seenKey = viewerId ? `seen_profile_posts_${viewerId}_${student.id}` : null;
+  const seenAt = seenKey ? localStorage.getItem(seenKey) : null;
+  const hasNewActivity = Boolean(
+    viewerId &&
+      String(viewerId) !== String(student.id) &&
+      latestPostAt &&
+      (!seenAt || latestPostAt > seenAt)
+  );
   const fallbackAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(student.name || 'User')}&background=random`;
   const avatarUrl = resolveMediaUrl(student.avatar_url) || fallbackAvatar;
 
   return (
-    <Card to={`/profile/${student.id}`}>
+    <Card
+      to={`/profile/${student.id}`}
+      onClick={() => {
+        if (seenKey && latestPostAt) {
+          localStorage.setItem(seenKey, latestPostAt);
+        }
+      }}
+    >
       {hasNewActivity && <NotificationIndicator />}
       <Avatar src={avatarUrl} alt={student.name} />
       <StudentName>{student.name}</StudentName>

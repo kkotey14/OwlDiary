@@ -15,6 +15,8 @@ const SidebarContainer = styled.aside`
   flex-direction: column;
   align-items: center;
   gap: 2.5rem;
+  position: relative;
+  z-index: 50;
 `;
 
 const NavItem = styled(NavLink)`
@@ -44,6 +46,7 @@ const NavItem = styled(NavLink)`
     box-shadow: 0 8px 20px rgba(15, 23, 42, 0.2);
     pointer-events: none;
     opacity: 0.95;
+    z-index: 200;
   }
 `;
 
@@ -76,6 +79,7 @@ const ActionItem = styled.button`
     box-shadow: 0 8px 20px rgba(15, 23, 42, 0.2);
     pointer-events: none;
     opacity: 0.95;
+    z-index: 200;
   }
 `;
 
@@ -109,7 +113,7 @@ const Sidebar = ({ onCreatePost }) => {
     try {
       const decoded = jwtDecode(token);
       return `/profile/${decoded.id}`;
-    } catch (error) {
+    } catch {
       return '/login';
     }
   }, [navigate]);
