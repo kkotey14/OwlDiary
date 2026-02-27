@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS students (
     font_family TEXT,
     accent_color TEXT,
     font_size TEXT,
+    profile_background_url TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -48,4 +49,13 @@ CREATE TABLE IF NOT EXISTS comments (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (post_id) REFERENCES posts (id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES students (id) ON DELETE CASCADE
+);
+
+-- Create the profile gallery table
+CREATE TABLE IF NOT EXISTS profile_gallery (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    student_id INTEGER NOT NULL,
+    photo_url TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (student_id) REFERENCES students (id) ON DELETE CASCADE
 );

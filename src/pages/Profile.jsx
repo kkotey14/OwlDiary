@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useOutletContext } from 'react-router-dom';
 import styled from 'styled-components';
 import ProfileHeader from '../components/ProfileHeader';
 import PostCard from '../components/PostCard';
@@ -174,6 +174,14 @@ const AvatarPreview = styled.img`
   border: 2px solid #e6eef8;
 `;
 
+const BackgroundPreview = styled.img`
+  width: 100%;
+  max-height: 180px;
+  border-radius: 12px;
+  object-fit: cover;
+  border: 2px solid #e6eef8;
+`;
+
 const ModalTitle = styled.h2`
   margin: 0;
   color: var(--profile-text, #2c3e50);
@@ -187,6 +195,8 @@ const ErrorText = styled.p`
 const Profile = () => {
   const { studentId } = useParams();
   const navigate = useNavigate();
+  const outletContext = useOutletContext();
+  const postsRefreshTrigger = outletContext ? outletContext.postsRefreshTrigger : 0;
   const [student, setStudent] = useState(null);
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -202,13 +212,17 @@ const Profile = () => {
   const [fontSize, setFontSize] = useState('16px');
   const [avatarFile, setAvatarFile] = useState(null);
   const [avatarPreview, setAvatarPreview] = useState('');
+  const [profileBackgroundFile, setProfileBackgroundFile] = useState(null);
+  const [profileBackgroundPreview, setProfileBackgroundPreview] = useState('');
   const [profileError, setProfileError] = useState('');
   const fileInputRef = useRef(null);
+  const backgroundInputRef = useRef(null);
   const [editingPost, setEditingPost] = useState(null);
   const [editTitle, setEditTitle] = useState('');
   const [editContent, setEditContent] = useState('');
   const [postError, setPostError] = useState('');
   const dragIndexRef = useRef(null);
+  const loadedStudentIdRef = useRef(null);
 
   const themeOptions = {
     classic: {
@@ -510,11 +524,21 @@ const Profile = () => {
       if (avatarPreview && avatarPreview.startsWith('blob:')) {
         URL.revokeObjectURL(avatarPreview);
       }
+      if (profileBackgroundPreview && profileBackgroundPreview.startsWith('blob:')) {
+        URL.revokeObjectURL(profileBackgroundPreview);
+      }
     };
-  }, [avatarPreview]);
+  }, [avatarPreview, profileBackgroundPreview]);
 
   useEffect(() => {
     const fetchData = async () => {
+      const shouldShowPageLoader =
+        loadedStudentIdRef.current === null ||
+        String(loadedStudentIdRef.current) !== String(studentId);
+      if (shouldShowPageLoader) {
+        setLoading(true);
+      }
+      setError(null);
       try {
         const token = getAuthTokenOrLogout(navigate);
         const [studentResponse, postsResponse] = await Promise.all([
@@ -532,6 +556,7 @@ const Profile = () => {
         const postsData = await postsResponse.json();
 
         setStudent(studentData);
+        loadedStudentIdRef.current = studentData?.id ?? null;
         setPosts(postsData);
         setProfileName(studentData.name || '');
         setProfileBio(studentData.about_me || '');
@@ -547,7 +572,19 @@ const Profile = () => {
             const decoded = jwtDecode(token);
             setIsOwner(String(decoded.id) === String(studentId));
             setIsAdmin(decoded.role === 'admin');
-          } catch (err) {
+            if (String(decoded.id) !== String(studentId)) {
+              const latestVisiblePostAt = postsData.reduce((latest, post) => {
+                const createdAt = post?.created_at || '';
+                return createdAt > latest ? createdAt : latest;
+              }, '');
+              if (latestVisiblePostAt) {
+                localStorage.setItem(
+                  `seen_profile_posts_${decoded.id}_${studentId}`,
+                  latestVisiblePostAt
+                );
+              }
+            }
+          } catch {
             setIsOwner(false);
             setIsAdmin(false);
           }
@@ -558,12 +595,14 @@ const Profile = () => {
       } catch (error) {
         setError(error.message);
       } finally {
-        setLoading(false);
+        if (shouldShowPageLoader) {
+          setLoading(false);
+        }
       }
     };
 
     fetchData();
-  }, [studentId]);
+  }, [studentId, postsRefreshTrigger, navigate]);
 
   useEffect(() => {
     if (!student) return;
@@ -584,11 +623,17 @@ const Profile = () => {
     setAccentColor(student.accent_color || '#542133');
     setFontSize(student.font_size || '16px');
     setAvatarFile(null);
+    setProfileBackgroundFile(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+    if (backgroundInputRef.current) {
+      backgroundInputRef.current.value = '';
+    }
     const avatar = student.avatar_url || '';
+    const background = student.profile_background_url || '';
     setAvatarPreview(addCacheBust(resolveMediaUrl(avatar)));
+    setProfileBackgroundPreview(addCacheBust(resolveMediaUrl(background)));
   }, [editingProfile, student]);
 
   if (loading) return <p>Loading profile...</p>;
@@ -606,6 +651,17 @@ const Profile = () => {
     setAvatarPreview(previewUrl);
   };
 
+  const handleBackgroundChange = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    if (profileBackgroundPreview && profileBackgroundPreview.startsWith('blob:')) {
+      URL.revokeObjectURL(profileBackgroundPreview);
+    }
+    setProfileBackgroundFile(file);
+    const previewUrl = URL.createObjectURL(file);
+    setProfileBackgroundPreview(previewUrl);
+  };
+
   const handleSaveProfile = async () => {
     setProfileError('');
     const token = getAuthTokenOrLogout(navigate);
@@ -621,6 +677,9 @@ const Profile = () => {
       formData.append('font_size', fontSize);
       if (avatarFile) {
         formData.append('avatar', avatarFile);
+      }
+      if (profileBackgroundFile) {
+        formData.append('profile_background', profileBackgroundFile);
       }
 
       const response = await fetch('/api/profile', {
@@ -642,9 +701,14 @@ const Profile = () => {
       const updated = await response.json();
       setStudent(updated);
       setAvatarFile(null);
+      setProfileBackgroundFile(null);
       setAvatarPreview(addCacheBust(resolveMediaUrl(updated.avatar_url)));
+      setProfileBackgroundPreview(addCacheBust(resolveMediaUrl(updated.profile_background_url || '')));
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
+      }
+      if (backgroundInputRef.current) {
+        backgroundInputRef.current.value = '';
       }
       setProfileName(updated.name || '');
       setProfileBio(updated.about_me || '');
@@ -937,6 +1001,21 @@ const Profile = () => {
                 </FilePicker>
               </div>
             </PreviewRow>
+            <FieldLabel htmlFor="profile-background-upload">Profile background</FieldLabel>
+            {profileBackgroundPreview && (
+              <BackgroundPreview src={profileBackgroundPreview} alt="Profile background preview" />
+            )}
+            <FileInput
+              ref={backgroundInputRef}
+              id="profile-background-upload"
+              type="file"
+              accept="image/*"
+              onChange={handleBackgroundChange}
+            />
+            <FilePicker htmlFor="profile-background-upload">
+              <span>Choose background image</span>
+              <FileName>{profileBackgroundFile ? profileBackgroundFile.name : 'No file selected'}</FileName>
+            </FilePicker>
             <ActionRow>
               <SecondaryButton onClick={() => setEditingProfile(false)}>Cancel</SecondaryButton>
               <ActionButton onClick={handleSaveProfile}>Save Profile</ActionButton>
