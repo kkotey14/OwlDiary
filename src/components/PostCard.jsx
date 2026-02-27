@@ -5,7 +5,7 @@ import { resolveMediaUrl } from '../utils/media';
 import { useNavigate, Link } from 'react-router-dom';
 import { getAuthTokenOrLogout, handleAuthFailure } from '../utils/auth';
 
-const Card = styled.div`
+const Card = styled(Link)`
   background: white; /* Changed from var(--card-background) to white for consistency */
   border-radius: 16px;
   padding: 1.5rem;
@@ -252,7 +252,11 @@ const PostCard = ({
           <StyledFiHeart $isLiked={isLiked} /> {/* Use StyledFiHeart */}
           <span>{currentLikes}</span>
         </EngagementIcon>
-        <EngagementIcon onClick={() => canComment && onCommentClick(post.id)}>
+        <EngagementIcon onClick={(e) => {
+          e.preventDefault();
+          if (canComment) onCommentClick(post.id);
+          navigate(`/post/${post.id}#comments`);
+        }}>
           <FiMessageSquare />
           <span>{post.comment_count || 0}</span>
         </EngagementIcon>
