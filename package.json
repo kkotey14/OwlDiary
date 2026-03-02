@@ -8,7 +8,8 @@
         "server": "nodemon server/index.js",
         "build": "vite build",
         "lint": "eslint .",
-        "preview": "vite preview"
+        "preview": "vite preview",
+        "seed": "node server/seed.js"
     },
     "dependencies": {
         "bcrypt": "^6.0.0",
