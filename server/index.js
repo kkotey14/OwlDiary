@@ -1,14 +1,13 @@
-import "dotenv/config";
 import express from "express";
+import dotenv from "dotenv";
+dotenv.config();
 import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import multer from "multer";
-import pkg from "pg";
-
-const { Pool } = pkg;
+import postgres from "postgres";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -18,33 +17,27 @@ const port = process.env.PORT || 5050;
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
 
 // Database setup
-const db = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false },
+const sql = postgres(process.env.DATABASE_URL, {
+    ssl: "require",
 });
 
-
-
 // Helper functions
-const dbGet = async (sql, params = []) => {
-    const { rows } = await db.query(sql, params);
-    return rows[0] || null;
+const dbGet = async (query) => {
+    const result = await query;
+    return result[0] || null;
 };
 
-const dbAll = async (sql, params = []) => {
-    const { rows } = await db.query(sql, params);
-    return rows;
+const dbAll = async (query) => {
+    return await query;
 };
 
-const dbRun = async (sql, params = []) => {
-    const result = await db.query(sql, params);
+const dbRun = async (query) => {
+    const result = await query;
     return {
-        lastID: result.rows[0]?.id || null,
-        changes: result.rowCount,
+        lastID: result[0]?.id || null,
+        changes: result.count || result.length,
     };
 };
-
-
 
 app.use(cors());
 app.use(express.json());
@@ -61,7 +54,10 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (req, file, cb) => {
-    if (file.mimetype.startsWith("image/") || file.mimetype.startsWith("video/")) {
+    if (
+        file.mimetype.startsWith("image/") ||
+        file.mimetype.startsWith("video/")
+    ) {
         cb(null, true);
     } else {
         cb(new Error("Only image and video files are allowed!"), false);
@@ -69,6 +65,7 @@ const fileFilter = (req, file, cb) => {
 };
 
 const upload = multer({ storage: storage, fileFilter: fileFilter });
+
 const avatarStorage = multer.diskStorage({
     destination: function (req, file, cb) {
         cb(null, path.join(__dirname, "uploads"));
@@ -79,6 +76,7 @@ const avatarStorage = multer.diskStorage({
         cb(null, `profile-${userId}-${Date.now()}-${safeName}`);
     },
 });
+
 const avatarUpload = multer({
     storage: avatarStorage,
     fileFilter: (req, file, cb) => {
@@ -95,7 +93,9 @@ const authenticateToken = (req, res, next) => {
     const token = authHeader && authHeader.split(" ")[1];
 
     if (!token) {
-        return res.status(401).json({ error: "Authentication token required." });
+        return res
+            .status(401)
+            .json({ error: "Authentication token required." });
     }
 
     jwt.verify(token, JWT_SECRET, (err, user) => {
@@ -112,7 +112,9 @@ app.post("/api/signup", async (req, res) => {
     const { name, email, password } = req.body;
 
     if (!name || !email || !password) {
-        return res.status(400).json({ error: "Please provide all required fields." });
+        return res
+            .status(400)
+            .json({ error: "Please provide all required fields." });
     }
 
     try {
@@ -120,18 +122,24 @@ app.post("/api/signup", async (req, res) => {
         const avatar_url = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`;
         const about_me = "New community member";
 
-        await dbRun(
-            "INSERT INTO students (name, email, password, avatar_url, about_me) VALUES ($1, $2, $3, $4, $5) RETURNING id",
-            [name, email, hashedPassword, avatar_url, about_me],
-        );
+        await dbRun(sql`
+            INSERT INTO students (name, email, password, avatar_url, about_me)
+            VALUES (${name}, ${email}, ${hashedPassword}, ${avatar_url}, ${about_me})
+            RETURNING id
+        `);
 
         return res.status(201).json({ message: "User created successfully." });
     } catch (error) {
         console.error("Signup error:", error);
-        if (error.message.includes("unique constraint") || error.message.includes("duplicate key")) {
+        if (
+            error.message.includes("unique constraint") ||
+            error.message.includes("duplicate key")
+        ) {
             return res.status(409).json({ error: "Email already exists." });
         }
-        return res.status(500).json({ error: "Server error during signup request processing." });
+        return res
+            .status(500)
+            .json({ error: "Server error during signup request processing." });
     }
 });
 
@@ -141,10 +149,14 @@ app.post("/api/login", async (req, res) => {
         const { email, password } = req.body;
 
         if (!email || !password) {
-            return res.status(400).json({ error: "Please provide email and password." });
+            return res
+                .status(400)
+                .json({ error: "Please provide email and password." });
         }
 
-        const user = await dbGet("SELECT * FROM students WHERE email = $1", [email]);
+        const user = await dbGet(sql`
+            SELECT * FROM students WHERE email = ${email}
+        `);
 
         if (!user) {
             return res.status(401).json({ error: "User not found." });
@@ -163,7 +175,9 @@ app.post("/api/login", async (req, res) => {
         return res.json({ token });
     } catch (error) {
         console.error("Login error:", error);
-        return res.status(500).json({ error: "Server error during login request processing." });
+        return res
+            .status(500)
+            .json({ error: "Server error during login request processing." });
     }
 });
 
@@ -171,15 +185,31 @@ app.get("/api/user-stats/:userId", authenticateToken, async (req, res) => {
     const { userId } = req.params;
 
     if (req.user.id != userId) {
-        return res.status(403).json({ message: "Forbidden: Unauthorized to view these stats." });
+        return res
+            .status(403)
+            .json({ message: "Forbidden: Unauthorized to view these stats." });
     }
 
     try {
-        const postsCount = await dbGet("SELECT COUNT(*) as count FROM posts WHERE student_id = $1", [userId]);
-        const commentsCount = await dbGet("SELECT COUNT(*) as count FROM comments WHERE user_id = $1", [userId]);
-        const likesCountResult = await dbGet("SELECT COUNT(*) as count FROM likes WHERE user_id = $1", [userId]);
-        const receivedLikesCount = await dbGet("SELECT SUM(likes) as count FROM posts WHERE student_id = $1", [userId]);
-        const userProfile = await dbGet("SELECT name, avatar_url, about_me FROM students WHERE id = $1", [userId]);
+        const postsCount = await dbGet(sql`
+            SELECT COUNT(*) as count FROM posts WHERE student_id = ${userId}
+        `);
+
+        const commentsCount = await dbGet(sql`
+            SELECT COUNT(*) as count FROM comments WHERE user_id = ${userId}
+        `);
+
+        const likesCountResult = await dbGet(sql`
+            SELECT COUNT(*) as count FROM likes WHERE user_id = ${userId}
+        `);
+
+        const receivedLikesCount = await dbGet(sql`
+            SELECT SUM(likes) as count FROM posts WHERE student_id = ${userId}
+        `);
+
+        const userProfile = await dbGet(sql`
+            SELECT name, avatar_url, about_me FROM students WHERE id = ${userId}
+        `);
 
         return res.json({
             posts: parseInt(postsCount?.count) || 0,
@@ -192,43 +222,59 @@ app.get("/api/user-stats/:userId", authenticateToken, async (req, res) => {
         });
     } catch (error) {
         console.error(`Error fetching user stats for ID ${userId}:`, error);
-        return res.status(500).json({ message: "Server error while fetching user stats." });
+        return res
+            .status(500)
+            .json({ message: "Server error while fetching user stats." });
     }
 });
 
-app.post("/api/posts", authenticateToken, upload.single("media"), async (req, res) => {
-    const { title, content, post_type, font_family } = req.body;
-    const student_id = req.user.id;
-    const media_url = req.file ? `/uploads/${req.file.filename}` : null;
+app.post(
+    "/api/posts",
+    authenticateToken,
+    upload.single("media"),
+    async (req, res) => {
+        const { title, content, post_type, font_family } = req.body;
+        const student_id = req.user.id;
+        const media_url = req.file ? `/uploads/${req.file.filename}` : null;
 
-    if (!student_id || !title || !content || !post_type) {
-        return res.status(400).json({ message: "All fields are required to create a post." });
-    }
+        if (!student_id || !title || !content || !post_type) {
+            return res
+                .status(400)
+                .json({ message: "All fields are required to create a post." });
+        }
 
-    try {
-        const result = await db.query(
-            "INSERT INTO posts (student_id, title, content, post_type, media_url, likes, created_at, is_hidden, display_order, post_font_family) VALUES ($1, $2, $3, $4, $5, 0, CURRENT_TIMESTAMP, 0, NULL, $6) RETURNING id",
-            [student_id, title, content, post_type, media_url, font_family || null],
-        );
-        const newPostId = result.rows[0].id;
+        try {
+            const result = await db.query(
+                "INSERT INTO posts (student_id, title, content, post_type, media_url, likes, created_at, is_hidden, display_order, post_font_family) VALUES ($1, $2, $3, $4, $5, 0, CURRENT_TIMESTAMP, 0, NULL, $6) RETURNING id",
+                [
+                    student_id,
+                    title,
+                    content,
+                    post_type,
+                    media_url,
+                    font_family || null,
+                ],
+            );
+            const newPostId = result.rows[0].id;
 
-        const newPost = await dbGet(
-            `SELECT 
+            const newPost = await dbGet(
+                `SELECT 
                 p.id, p.title, p.content, p.post_type, p.likes, p.created_at, p.media_url,
                 p.is_hidden, p.display_order, p.post_font_family,
                 s.name as student_name, s.avatar_url as student_avatar
             FROM posts p
             JOIN students s ON p.student_id = s.id
             WHERE p.id = $1`,
-            [newPostId],
-        );
+                [newPostId],
+            );
 
-        return res.status(201).json({ success: true, post: newPost });
-    } catch (error) {
-        console.error("Error creating post:", error);
-        return res.status(500).json({ message: "Error creating post." });
-    }
-});
+            return res.status(201).json({ success: true, post: newPost });
+        } catch (error) {
+            console.error("Error creating post:", error);
+            return res.status(500).json({ message: "Error creating post." });
+        }
+    },
+);
 
 app.post("/api/posts/:id/like", authenticateToken, async (req, res) => {
     const { id: postId } = req.params;
@@ -241,11 +287,21 @@ app.post("/api/posts/:id/like", authenticateToken, async (req, res) => {
         );
 
         if (existingLike) {
-            await dbRun("DELETE FROM likes WHERE user_id = $1 AND post_id = $2", [userId, postId]);
-            await dbRun("UPDATE posts SET likes = likes - 1 WHERE id = $1", [postId]);
+            await dbRun(
+                "DELETE FROM likes WHERE user_id = $1 AND post_id = $2",
+                [userId, postId],
+            );
+            await dbRun("UPDATE posts SET likes = likes - 1 WHERE id = $1", [
+                postId,
+            ]);
         } else {
-            await dbRun("INSERT INTO likes (user_id, post_id) VALUES ($1, $2)", [userId, postId]);
-            await dbRun("UPDATE posts SET likes = likes + 1 WHERE id = $1", [postId]);
+            await dbRun(
+                "INSERT INTO likes (user_id, post_id) VALUES ($1, $2)",
+                [userId, postId],
+            );
+            await dbRun("UPDATE posts SET likes = likes + 1 WHERE id = $1", [
+                postId,
+            ]);
         }
 
         const updatedPost = await dbGet(
@@ -263,7 +319,9 @@ app.post("/api/posts/:id/like", authenticateToken, async (req, res) => {
         );
 
         if (!updatedPost) {
-            return res.status(404).json({ message: "Post not found after update." });
+            return res
+                .status(404)
+                .json({ message: "Post not found after update." });
         }
 
         return res.json(updatedPost);
@@ -279,19 +337,29 @@ app.put("/api/posts/:id", authenticateToken, async (req, res) => {
     const userId = req.user.id;
 
     if (!title || !content) {
-        return res.status(400).json({ message: "Title and content are required." });
+        return res
+            .status(400)
+            .json({ message: "Title and content are required." });
     }
 
     try {
-        const existingPost = await dbGet("SELECT * FROM posts WHERE id = $1", [postId]);
+        const existingPost = await dbGet("SELECT * FROM posts WHERE id = $1", [
+            postId,
+        ]);
         if (!existingPost) {
             return res.status(404).json({ message: "Post not found." });
         }
         if (existingPost.student_id !== userId) {
-            return res.status(403).json({ message: "Forbidden: You can only edit your own posts." });
+            return res.status(403).json({
+                message: "Forbidden: You can only edit your own posts.",
+            });
         }
 
-        await dbRun("UPDATE posts SET title = $1, content = $2 WHERE id = $3", [title, content, postId]);
+        await dbRun("UPDATE posts SET title = $1, content = $2 WHERE id = $3", [
+            title,
+            content,
+            postId,
+        ]);
 
         const updatedPost = await dbGet(
             `SELECT 
@@ -318,22 +386,38 @@ app.put("/api/posts/:id/visibility", authenticateToken, async (req, res) => {
     const { is_hidden } = req.body;
     const userId = req.user.id;
     let isAdmin = req.user && req.user.role === "admin";
-    const hiddenValue = is_hidden === true || is_hidden === 1 || is_hidden === "1" || is_hidden === "true" ? 1 : 0;
+    const hiddenValue =
+        is_hidden === true ||
+        is_hidden === 1 ||
+        is_hidden === "1" ||
+        is_hidden === "true"
+            ? 1
+            : 0;
 
     try {
-        const existingPost = await dbGet("SELECT * FROM posts WHERE id = $1", [postId]);
+        const existingPost = await dbGet("SELECT * FROM posts WHERE id = $1", [
+            postId,
+        ]);
         if (!existingPost) {
             return res.status(404).json({ message: "Post not found." });
         }
         if (!isAdmin) {
-            const roleRow = await dbGet("SELECT role FROM students WHERE id = $1", [userId]);
+            const roleRow = await dbGet(
+                "SELECT role FROM students WHERE id = $1",
+                [userId],
+            );
             isAdmin = roleRow && roleRow.role === "admin";
         }
         if (!isAdmin && existingPost.student_id !== userId) {
-            return res.status(403).json({ message: "Forbidden: You can only hide your own posts." });
+            return res.status(403).json({
+                message: "Forbidden: You can only hide your own posts.",
+            });
         }
 
-        await dbRun("UPDATE posts SET is_hidden = $1 WHERE id = $2", [hiddenValue, postId]);
+        await dbRun("UPDATE posts SET is_hidden = $1 WHERE id = $2", [
+            hiddenValue,
+            postId,
+        ]);
 
         const updatedPost = await dbGet(
             `SELECT 
@@ -351,7 +435,9 @@ app.put("/api/posts/:id/visibility", authenticateToken, async (req, res) => {
         return res.json(updatedPost);
     } catch (error) {
         console.error("Error updating post visibility:", error);
-        return res.status(500).json({ message: "Error updating post visibility." });
+        return res
+            .status(500)
+            .json({ message: "Error updating post visibility." });
     }
 });
 
@@ -368,14 +454,22 @@ app.put("/api/posts/reorder", authenticateToken, async (req, res) => {
         await client.query("BEGIN");
         for (let i = 0; i < postIds.length; i++) {
             const postId = postIds[i];
-            const { rows } = await client.query("SELECT student_id FROM posts WHERE id = $1", [postId]);
+            const { rows } = await client.query(
+                "SELECT student_id FROM posts WHERE id = $1",
+                [postId],
+            );
             const existingPost = rows[0];
             if (!existingPost || existingPost.student_id !== userId) {
                 await client.query("ROLLBACK");
                 client.release();
-                return res.status(403).json({ message: "Forbidden: Invalid post ownership." });
+                return res
+                    .status(403)
+                    .json({ message: "Forbidden: Invalid post ownership." });
             }
-            await client.query("UPDATE posts SET display_order = $1 WHERE id = $2", [i, postId]);
+            await client.query(
+                "UPDATE posts SET display_order = $1 WHERE id = $2",
+                [i, postId],
+            );
         }
         await client.query("COMMIT");
         client.release();
@@ -393,12 +487,16 @@ app.delete("/api/posts/:id", authenticateToken, async (req, res) => {
     const userId = req.user.id;
 
     try {
-        const existingPost = await dbGet("SELECT * FROM posts WHERE id = $1", [postId]);
+        const existingPost = await dbGet("SELECT * FROM posts WHERE id = $1", [
+            postId,
+        ]);
         if (!existingPost) {
             return res.status(404).json({ message: "Post not found." });
         }
         if (existingPost.student_id !== userId) {
-            return res.status(403).json({ message: "Forbidden: You can only delete your own posts." });
+            return res.status(403).json({
+                message: "Forbidden: You can only delete your own posts.",
+            });
         }
 
         await dbRun("DELETE FROM comments WHERE post_id = $1", [postId]);
@@ -440,14 +538,18 @@ app.post("/api/posts/:id/comments", authenticateToken, async (req, res) => {
     const userId = req.user.id;
 
     if (!content || !content.trim()) {
-        return res.status(400).json({ message: "Comment content is required." });
+        return res
+            .status(400)
+            .json({ message: "Comment content is required." });
     }
 
     try {
-        const { lastID: newCommentId } = await dbRun(
+        const result = await db.query(
             "INSERT INTO comments (post_id, user_id, content) VALUES ($1, $2, $3) RETURNING id",
             [postId, userId, content.trim()],
         );
+
+        const newCommentId = result.rows[0].id;
 
         const newComment = await dbGet(
             `SELECT 
@@ -466,63 +568,80 @@ app.post("/api/posts/:id/comments", authenticateToken, async (req, res) => {
     }
 });
 
-app.put("/api/profile", authenticateToken, avatarUpload.single("avatar"), async (req, res) => {
-    const { about_me, name, appearance_theme, font_family, accent_color, font_size } = req.body;
-    const userId = req.user.id;
-    const avatar_url = req.file ? `/uploads/${req.file.filename}` : null;
+app.put(
+    "/api/profile",
+    authenticateToken,
+    avatarUpload.single("avatar"),
+    async (req, res) => {
+        const {
+            about_me,
+            name,
+            appearance_theme,
+            font_family,
+            accent_color,
+            font_size,
+        } = req.body;
+        const userId = req.user.id;
+        const avatar_url = req.file ? `/uploads/${req.file.filename}` : null;
 
-    const updates = [];
-    const params = [];
-    let paramCount = 1;
+        const updates = [];
+        const params = [];
+        let paramCount = 1;
 
-    if (typeof about_me === "string") {
-        updates.push(`about_me = $${paramCount++}`);
-        params.push(about_me.trim());
-    }
-    if (typeof name === "string" && name.trim()) {
-        updates.push(`name = $${paramCount++}`);
-        params.push(name.trim());
-    }
-    if (typeof appearance_theme === "string") {
-        updates.push(`appearance_theme = $${paramCount++}`);
-        params.push(appearance_theme.trim() || null);
-    }
-    if (typeof font_family === "string") {
-        updates.push(`font_family = $${paramCount++}`);
-        params.push(font_family.trim() || null);
-    }
-    if (typeof accent_color === "string") {
-        updates.push(`accent_color = $${paramCount++}`);
-        params.push(accent_color.trim() || null);
-    }
-    if (typeof font_size === "string") {
-        updates.push(`font_size = $${paramCount++}`);
-        params.push(font_size.trim() || null);
-    }
-    if (avatar_url) {
-        updates.push(`avatar_url = $${paramCount++}`);
-        params.push(avatar_url);
-    }
+        if (typeof about_me === "string") {
+            updates.push(`about_me = $${paramCount++}`);
+            params.push(about_me.trim());
+        }
+        if (typeof name === "string" && name.trim()) {
+            updates.push(`name = $${paramCount++}`);
+            params.push(name.trim());
+        }
+        if (typeof appearance_theme === "string") {
+            updates.push(`appearance_theme = $${paramCount++}`);
+            params.push(appearance_theme.trim() || null);
+        }
+        if (typeof font_family === "string") {
+            updates.push(`font_family = $${paramCount++}`);
+            params.push(font_family.trim() || null);
+        }
+        if (typeof accent_color === "string") {
+            updates.push(`accent_color = $${paramCount++}`);
+            params.push(accent_color.trim() || null);
+        }
+        if (typeof font_size === "string") {
+            updates.push(`font_size = $${paramCount++}`);
+            params.push(font_size.trim() || null);
+        }
+        if (avatar_url) {
+            updates.push(`avatar_url = $${paramCount++}`);
+            params.push(avatar_url);
+        }
 
-    if (updates.length === 0) {
-        return res.status(400).json({ message: "No profile updates provided." });
-    }
+        if (updates.length === 0) {
+            return res
+                .status(400)
+                .json({ message: "No profile updates provided." });
+        }
 
-    try {
-        params.push(userId);
-        await dbRun(`UPDATE students SET ${updates.join(", ")} WHERE id = $${paramCount}`, params);
+        try {
+            params.push(userId);
+            await dbRun(
+                `UPDATE students SET ${updates.join(", ")} WHERE id = $${paramCount}`,
+                params,
+            );
 
-        const updatedUser = await dbGet(
-            "SELECT id, name, email, about_me, avatar_url, appearance_theme, font_family, accent_color, font_size FROM students WHERE id = $1",
-            [userId],
-        );
+            const updatedUser = await dbGet(
+                "SELECT id, name, email, about_me, avatar_url, appearance_theme, font_family, accent_color, font_size FROM students WHERE id = $1",
+                [userId],
+            );
 
-        return res.json(updatedUser);
-    } catch (error) {
-        console.error("Error updating profile:", error);
-        return res.status(500).json({ message: "Error updating profile." });
-    }
-});
+            return res.json(updatedUser);
+        } catch (error) {
+            console.error("Error updating profile:", error);
+            return res.status(500).json({ message: "Error updating profile." });
+        }
+    },
+);
 
 app.get("/api/export", authenticateToken, async (req, res) => {
     if (!req.user?.id) {
@@ -532,7 +651,10 @@ app.get("/api/export", authenticateToken, async (req, res) => {
     try {
         const userId = req.user.id;
 
-        const user = await dbGet("SELECT name, email, about_me FROM students WHERE id = $1", [userId]);
+        const user = await dbGet(
+            "SELECT name, email, about_me FROM students WHERE id = $1",
+            [userId],
+        );
 
         const posts = await dbAll(
             `SELECT 
@@ -562,17 +684,27 @@ app.get("/api/export", authenticateToken, async (req, res) => {
 
         const data = {
             exportedAt: new Date().toISOString(),
-            user: { name: user.name, email: user.email, about_me: user.about_me },
+            user: {
+                name: user.name,
+                email: user.email,
+                about_me: user.about_me,
+            },
             summary: {
                 totalPosts: posts.length,
                 totalComments: comments.length,
-                totalLikesReceived: posts.reduce((sum, p) => sum + (p.likes || 0), 0),
+                totalLikesReceived: posts.reduce(
+                    (sum, p) => sum + (p.likes || 0),
+                    0,
+                ),
             },
             posts,
             comments,
         };
 
-        res.setHeader("Content-Disposition", `attachment; filename="export-${userId}.json"`);
+        res.setHeader(
+            "Content-Disposition",
+            `attachment; filename="export-${userId}.json"`,
+        );
         res.setHeader("Content-Type", "application/json");
         res.send(JSON.stringify(data, null, 2));
     } catch (error) {
@@ -601,7 +733,9 @@ app.get("/api/posts", authenticateToken, async (req, res) => {
         return res.json(posts);
     } catch (error) {
         console.error("Error fetching posts:", error);
-        return res.status(500).json({ message: "Server error while fetching posts." });
+        return res
+            .status(500)
+            .json({ message: "Server error while fetching posts." });
     }
 });
 
@@ -678,7 +812,7 @@ app.get("/api/quote/today", authenticateToken, async (req, res) => {
         }
 
         const random = await dbGet(
-            "SELECT * FROM quotes WHERE date_for IS NULL ORDER BY RANDOM() LIMIT 1"
+            "SELECT * FROM quotes WHERE date_for IS NULL ORDER BY RANDOM() LIMIT 1",
         );
 
         if (!random) {
@@ -697,11 +831,15 @@ app.post("/api/quote", authenticateToken, async (req, res) => {
     const { text, author, date_for } = req.body;
 
     if (req.user.role !== "admin" && req.user.role !== "professor") {
-        return res.status(403).json({ message: "Forbidden: Only professors can schedule quotes." });
+        return res.status(403).json({
+            message: "Forbidden: Only professors can schedule quotes.",
+        });
     }
 
     if (!text || !date_for) {
-        return res.status(400).json({ message: "text and date_for are required." });
+        return res
+            .status(400)
+            .json({ message: "text and date_for are required." });
     }
 
     try {
@@ -709,10 +847,17 @@ app.post("/api/quote", authenticateToken, async (req, res) => {
             "INSERT INTO quotes (text, author, date_for, is_manual, created_by) VALUES ($1, $2, $3, 1, $4) RETURNING id",
             [text, author || "Unknown", date_for, req.user.id],
         );
-        return res.status(201).json({ message: "Quote scheduled successfully." });
+        return res
+            .status(201)
+            .json({ message: "Quote scheduled successfully." });
     } catch (error) {
-        if (error.message.includes("unique constraint") || error.message.includes("duplicate key")) {
-            return res.status(409).json({ message: "A quote is already scheduled for that date." });
+        if (
+            error.message.includes("unique constraint") ||
+            error.message.includes("duplicate key")
+        ) {
+            return res.status(409).json({
+                message: "A quote is already scheduled for that date.",
+            });
         }
         console.error("Error scheduling quote:", error);
         return res.status(500).json({ message: "Error scheduling quote." });
@@ -733,3 +878,5 @@ if (process.env.NODE_ENV === "production") {
 app.listen(port, () => {
     console.log(`Server listening on port ${port}`);
 });
+
+export default sql;
