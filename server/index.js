@@ -100,6 +100,26 @@ const avatarUpload = multer({
         }
     },
 });
+const galleryStorage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, path.join(__dirname, "uploads"));
+    },
+    filename: function (req, file, cb) {
+        const userId = req.user ? req.user.id : "unknown";
+        const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
+        cb(null, `gallery-${userId}-${Date.now()}-${safeName}`);
+    },
+});
+const galleryUpload = multer({
+    storage: galleryStorage,
+    fileFilter: (req, file, cb) => {
+        if (file.mimetype.startsWith("image/")) {
+            cb(null, true);
+        } else {
+            cb(new Error("Only image files are allowed for gallery uploads."), false);
+        }
+    },
+});
 
 const authenticateToken = (req, res, next) => {
     const authHeader = req.headers["authorization"];
@@ -583,7 +603,10 @@ app.post("/api/posts/:id/comments", authenticateToken, async (req, res) => {
 app.put(
     "/api/profile",
     authenticateToken,
-    avatarUpload.single("avatar"),
+    avatarUpload.fields([
+        { name: "avatar", maxCount: 1 },
+        { name: "profile_background", maxCount: 1 },
+    ]),
     async (req, res) => {
         const {
             about_me,
@@ -594,7 +617,12 @@ app.put(
             font_size,
         } = req.body;
         const userId = req.user.id;
-        const avatar_url = req.file ? `/uploads/${req.file.filename}` : null;
+        const avatarFile = req.files?.avatar?.[0];
+        const backgroundFile = req.files?.profile_background?.[0];
+        const avatar_url = avatarFile ? `/uploads/${avatarFile.filename}` : null;
+        const profile_background_url = backgroundFile
+            ? `/uploads/${backgroundFile.filename}`
+            : null;
 
         const updates = [];
         const params = [];
@@ -628,6 +656,10 @@ app.put(
             updates.push(`avatar_url = $${paramCount++}`);
             params.push(avatar_url);
         }
+        if (profile_background_url) {
+            updates.push(`profile_background_url = $${paramCount++}`);
+            params.push(profile_background_url);
+        }
 
         if (updates.length === 0) {
             return res
@@ -643,7 +675,7 @@ app.put(
             );
 
             const updatedUser = await dbGet(
-                "SELECT id, name, email, about_me, avatar_url, appearance_theme, font_family, accent_color, font_size FROM students WHERE id = $1",
+                "SELECT id, name, email, about_me, avatar_url, appearance_theme, font_family, accent_color, font_size, profile_background_url FROM students WHERE id = $1",
                 [userId],
             );
 
@@ -725,6 +757,35 @@ app.get("/api/export", authenticateToken, async (req, res) => {
     }
 });
 
+app.get("/api/posts/:id", authenticateToken, async (req, res) => {
+    const { id: postId } = req.params;
+    const userId = req.user.id;
+
+    try {
+        const post = await dbGet(
+            `SELECT 
+                p.id, p.student_id, p.title, p.content, p.post_type, p.likes, p.created_at, p.media_url,
+                p.is_hidden, p.display_order, p.post_font_family,
+                s.name as student_name, s.avatar_url as student_avatar,
+                CASE WHEN EXISTS (SELECT 1 FROM likes WHERE user_id = $1 AND post_id = p.id) THEN 1 ELSE 0 END AS isLiked,
+                (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) AS comment_count
+            FROM posts p
+            JOIN students s ON p.student_id = s.id
+            WHERE p.id = $2`,
+            [userId, postId],
+        );
+
+        if (!post) {
+            return res.status(404).json({ message: "Post not found." });
+        }
+
+        return res.json(post);
+    } catch (error) {
+        console.error("Error fetching post:", error);
+        return res.status(500).json({ message: "Error fetching post." });
+    }
+});
+
 app.get("/api/posts", authenticateToken, async (req, res) => {
     const userId = req.user.id;
     try {
@@ -751,9 +812,47 @@ app.get("/api/posts", authenticateToken, async (req, res) => {
     }
 });
 
+app.get("/api/posts/:id", authenticateToken, async (req, res) => {
+    const { id: postId } = req.params;
+    const userId = req.user.id;
+
+    try {
+        const post = await dbGet(
+            `SELECT 
+                p.id, p.student_id, p.title, p.content, p.post_type, p.likes, p.created_at, p.media_url,
+                p.is_hidden, p.display_order, p.post_font_family,
+                s.name as student_name, s.avatar_url as student_avatar,
+                CASE WHEN EXISTS (SELECT 1 FROM likes WHERE user_id = $1 AND post_id = p.id) THEN 1 ELSE 0 END AS isLiked,
+                (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) AS comment_count
+            FROM posts p
+            JOIN students s ON p.student_id = s.id
+            WHERE p.id = $2`,
+            [userId, postId],
+        );
+
+        if (!post) {
+            return res.status(404).json({ message: "Post not found." });
+        }
+
+        return res.json(post);
+    } catch (error) {
+        console.error("Error fetching post:", error);
+        return res.status(500).json({ message: "Error fetching post." });
+    }
+});
+
+// Student directory routes
 app.get("/api/students", async (req, res) => {
     try {
-        const rows = await dbAll("SELECT * FROM students ORDER BY name");
+        const rows = await dbAll(
+            `SELECT
+              s.*,
+              MAX(p.created_at) AS latest_post_at
+            FROM students s
+            LEFT JOIN posts p ON p.student_id = s.id AND p.is_hidden = 0
+            GROUP BY s.id
+            ORDER BY s.name`,
+        );
         return res.json(rows);
     } catch (error) {
         return res.status(500).json({ error: error.message });
@@ -772,6 +871,46 @@ app.get("/api/students/:id", async (req, res) => {
         return res.status(500).json({ error: error.message });
     }
 });
+
+app.get("/api/students/:id/gallery", async (req, res) => {
+    const { id } = req.params;
+    try {
+        const rows = await dbAll(
+            "SELECT id, student_id, photo_url, created_at FROM profile_gallery WHERE student_id = $1 ORDER BY created_at DESC, id DESC",
+            [id],
+        );
+        return res.json(rows);
+    } catch (error) {
+        return res.status(500).json({ error: error.message });
+    }
+});
+
+app.post(
+    "/api/profile/gallery",
+    authenticateToken,
+    galleryUpload.single("photo"),
+    async (req, res) => {
+        const userId = req.user.id;
+        if (!req.file) {
+            return res.status(400).json({ error: "Photo file is required." });
+        }
+
+        try {
+            const photoUrl = `/uploads/${req.file.filename}`;
+            const result = await dbRun(
+                "INSERT INTO profile_gallery (student_id, photo_url) VALUES ($1, $2) RETURNING id",
+                [userId, photoUrl],
+            );
+            const photo = await dbGet(
+                "SELECT id, student_id, photo_url, created_at FROM profile_gallery WHERE id = $1",
+                [result.lastID],
+            );
+            return res.status(201).json(photo);
+        } catch (error) {
+            return res.status(500).json({ error: error.message });
+        }
+    },
+);
 
 app.get("/api/students/:id/posts", async (req, res) => {
     const { id } = req.params;
