@@ -227,7 +227,6 @@ const PostCard = ({
       <PostTitleLink to={`/post/${post.id}`}>
         <PostTitle style={{ fontFamily: postFont }}>{post.title}</PostTitle>
       </PostTitleLink>
-
       {post.media_url && (
         <PostMedia>
           {post.post_type === 'image' && <img src={getMediaUrl(post.media_url)} alt="Post media" />}
