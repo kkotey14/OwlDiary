@@ -7,7 +7,7 @@ const isExpired = (token) => {
       return false;
     }
     return decoded.exp <= Math.floor(Date.now() / 1000);
-  } catch (error) {
+  } catch {
     return true;
   }
 };

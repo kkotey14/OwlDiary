@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react'; // Import useRef
+import React, { useState } from 'react';
 import styled from 'styled-components';
 import { useOutletContext } from 'react-router-dom';
 import ActivityFeed from '../components/ActivityFeed';
@@ -41,21 +41,13 @@ const Sidebar = styled.div`
 `;
 
 const Dashboard = () => {
-  const [statsRefreshTrigger, setStatsRefreshTrigger] = useState(0); // New state for triggering stats refresh
-  const activityFeedRef = useRef(); // Create a ref for ActivityFeed
+  const [statsRefreshTrigger, setStatsRefreshTrigger] = useState(0);
   const outletContext = useOutletContext();
   const postsRefreshTrigger = outletContext ? outletContext.postsRefreshTrigger : 0;
 
   const fetchStats = () => {
-    setStatsRefreshTrigger(prev => prev + 1); // Increment to trigger YourStats re-fetch
+    setStatsRefreshTrigger(prev => prev + 1);
   };
-
-  useEffect(() => {
-    if (activityFeedRef.current && activityFeedRef.current.fetchPosts) {
-      activityFeedRef.current.fetchPosts();
-    }
-    fetchStats();
-  }, [postsRefreshTrigger]);
 
   return (
     <DashboardPage>
@@ -65,13 +57,12 @@ const Dashboard = () => {
       <DashboardContainer>
         <MainContent>
           <ActivityFeed
-            ref={activityFeedRef}
             fetchStats={fetchStats}
             refreshTrigger={postsRefreshTrigger}
-          /> {/* Attach ref to ActivityFeed and pass fetchStats */}
+          />
         </MainContent>
         <Sidebar>
-          <YourStats statsRefreshTrigger={statsRefreshTrigger} /> {/* Pass the trigger to YourStats */}
+          <YourStats statsRefreshTrigger={`${postsRefreshTrigger}-${statsRefreshTrigger}`} />
         </Sidebar>
       </DashboardContainer>
     </DashboardPage>

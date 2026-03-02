@@ -230,10 +230,21 @@ const ProfileHeader = ({ student, showEditButton, onEditProfile }) => {
       try {
         const response = await fetch(`/api/students/${student.id}/gallery`);
         if (!response.ok) {
-          throw new Error("Failed to load gallery");
+          const text = await response.text();
+          let message = "Failed to load gallery";
+          try {
+            const parsed = text ? JSON.parse(text) : null;
+            message = parsed?.message || parsed?.error || message;
+          } catch {
+            message = text || message;
+          }
+          throw new Error(message);
         }
         const data = await response.json();
-        if (isMounted) setGallery(Array.isArray(data) ? data : []);
+        if (isMounted) {
+          setGallery(Array.isArray(data) ? data : []);
+          setGalleryError("");
+        }
       } catch (error) {
         if (isMounted) setGalleryError(error.message);
       }

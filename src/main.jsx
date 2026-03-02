@@ -13,7 +13,7 @@ import LoginPage from "./pages/LoginPage.jsx";
 import SignUpPage from "./pages/SignUpPage.jsx";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage.jsx";
 import Settings from "./pages/Settings.jsx";
-const Notifications = () => <h1>Notifications Page</h1>;
+import Notifications from "./pages/Notifications.jsx";
 
 const router = createBrowserRouter([
     {
