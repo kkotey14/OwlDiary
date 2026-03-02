@@ -6,10 +6,10 @@ import { useNavigate, Link } from 'react-router-dom';
 import { getAuthTokenOrLogout, handleAuthFailure } from '../utils/auth';
 
 const Card = styled.div`
-  background: white; /* Changed from var(--card-background) to white for consistency */
+  background: white;
   border-radius: 16px;
   padding: 1.5rem;
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1); /* Adjusted shadow for consistency */
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
   display: flex;
   flex-direction: column;
   gap: 1rem;
@@ -45,7 +45,7 @@ const Avatar = styled.img`
 
 const AuthorName = styled.span`
   font-weight: 500;
-  color: #2c3e50; /* Changed from var(--text-primary) to hex code */
+  color: #2c3e50;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -54,7 +54,7 @@ const AuthorName = styled.span`
 const PostTitle = styled.h3`
   font-size: 1.25rem;
   font-weight: 700;
-  color: #2c3e50; /* Changed from var(--text-primary) to hex code */
+  color: #2c3e50;
 `;
 
 const PostTitleLink = styled(Link)`
@@ -63,20 +63,21 @@ const PostTitleLink = styled(Link)`
 `;
 
 const PostMedia = styled.div`
-  margin: 15px 0; /* Add margin */
+  margin: 15px 0;
   width: 100%;
-  
-  img, video {
+
+  img,
+  video {
     width: 100%;
-    max-height: 400px; /* Limit height for media */
+    max-height: 400px;
     object-fit: contain;
-    border-radius: 8px; /* Add border-radius */
-    background-color: #f0f2f5; /* Placeholder background */
+    border-radius: 8px;
+    background-color: #f0f2f5;
   }
 `;
 
 const PostPreview = styled.p`
-  color: #556; /* Changed from var(--text-secondary) to hex code */
+  color: #556;
   line-height: 1.6;
 `;
 
@@ -93,9 +94,9 @@ const EngagementIcon = styled.div`
   gap: 0.5rem;
   cursor: pointer;
   transition: color 0.3s;
-  
+
   &.liked {
-    color: red; /* Color for liked state */
+    color: red;
   }
 
   &:hover {
@@ -134,7 +135,6 @@ const HiddenBadge = styled.span`
   padding: 0.2rem 0.6rem;
 `;
 
-
 const StyledFiHeart = styled(FiHeart)`
   color: ${(props) => (props.$isLiked ? 'red' : 'currentColor')};
   transition: color 0.3s;
@@ -152,18 +152,15 @@ const PostCard = ({
   onToggleVisibility,
 }) => {
   const [currentLikes, setCurrentLikes] = useState(post.likes);
-  const [isLiked, setIsLiked] = useState(post.isLiked === 1); // Initialize from prop
+  const [isLiked, setIsLiked] = useState(post.isLiked === 1);
   const navigate = useNavigate();
   const canComment = typeof onCommentClick === 'function';
   const isHidden = post.is_hidden === 1 || post.is_hidden === true;
   const postFont = post.post_font_family || 'inherit';
 
   const handleLike = async () => {
-    console.log('handleLike: Initiating like toggle for post ID:', post.id);
     const token = getAuthTokenOrLogout(navigate);
     if (!token) {
-      console.error('handleLike: Authentication token not found.');
-      // Optionally, redirect to login or show a message
       return;
     }
 
@@ -172,34 +169,30 @@ const PostCard = ({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}` // Add Authorization header
+          Authorization: `Bearer ${token}`,
         },
       });
 
-      console.log('handleLike: Response status:', response.status);
       if (!response.ok) {
         if (handleAuthFailure(response.status, navigate)) {
           return;
         }
         const errorText = await response.text();
-        console.error('handleLike: API error response:', errorText);
         throw new Error(`API error: ${response.status} - ${errorText}`);
       }
 
       const updatedPost = await response.json();
-      console.log('handleLike: Parsed updated post data:', updatedPost);
 
       setCurrentLikes(updatedPost.likes);
-      setIsLiked(!!updatedPost.isLiked); // Corrected: Update isLiked based on server response (coerce to boolean)
+      setIsLiked(!!updatedPost.isLiked);
       if (onLikeSuccess) {
-        onLikeSuccess(updatedPost); // Notify parent component
+        onLikeSuccess(updatedPost);
       }
       if (fetchStats) {
-        fetchStats(); // Call fetchStats to refresh the stats card
+        fetchStats();
       }
     } catch (error) {
       console.error('handleLike: Error toggling like:', error);
-      // Optionally show an error message to the user
     }
   };
 
@@ -234,25 +227,26 @@ const PostCard = ({
       <PostTitleLink to={`/post/${post.id}`}>
         <PostTitle style={{ fontFamily: postFont }}>{post.title}</PostTitle>
       </PostTitleLink>
-      
+
       {post.media_url && (
         <PostMedia>
-          {post.post_type === 'image' && (
-            <img src={getMediaUrl(post.media_url)} alt="Post media" />
-          )}
-          {post.post_type === 'video' && (
-            <video src={getMediaUrl(post.media_url)} controls />
-          )}
+          {post.post_type === 'image' && <img src={getMediaUrl(post.media_url)} alt="Post media" />}
+          {post.post_type === 'video' && <video src={getMediaUrl(post.media_url)} controls />}
         </PostMedia>
       )}
 
       <PostPreview style={{ fontFamily: postFont }}>{post.content.substring(0, 150)}...</PostPreview>
       <EngagementBar>
         <EngagementIcon onClick={handleLike}>
-          <StyledFiHeart $isLiked={isLiked} /> {/* Use StyledFiHeart */}
+          <StyledFiHeart $isLiked={isLiked} />
           <span>{currentLikes}</span>
         </EngagementIcon>
-        <EngagementIcon onClick={() => canComment && onCommentClick(post.id)}>
+        <EngagementIcon
+          onClick={(e) => {
+            e.preventDefault();
+            if (canComment) onCommentClick(post.id);
+            navigate(`/post/${post.id}#comments`);
+          }}>
           <FiMessageSquare />
           <span>{post.comment_count || 0}</span>
         </EngagementIcon>
