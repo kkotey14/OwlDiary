@@ -4,6 +4,7 @@ dotenv.config();
 import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
+import fs from "fs";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import multer from "multer";
@@ -15,6 +16,7 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const port = process.env.PORT || 5050;
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
+const SCHEMA_PATH = path.join(__dirname, "../Database/schema.sql");
 
 // Database setup
 const sql = postgres(process.env.DATABASE_URL, {
@@ -50,6 +52,51 @@ const dbRun = async (query, params = []) => {
                   ? result.length
                   : 0,
     };
+};
+
+const initializeDatabase = async () => {
+    const schema = fs.readFileSync(SCHEMA_PATH, "utf8");
+    const cleanedSchema = schema
+        .split("\n")
+        .filter((line) => !line.trim().startsWith("--"))
+        .join("\n");
+    const statements = cleanedSchema
+        .split(/;\s*(?:\n|$)/g)
+        .map((statement) => statement.trim())
+        .filter(Boolean);
+
+    for (const statement of statements) {
+        await sql.unsafe(statement);
+    }
+
+    // Ensure compatibility with databases created before newer profile/gallery fields.
+    await sql.unsafe(
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user'",
+    );
+    await sql.unsafe(
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS appearance_theme TEXT",
+    );
+    await sql.unsafe(
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS font_family TEXT",
+    );
+    await sql.unsafe(
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS accent_color TEXT",
+    );
+    await sql.unsafe(
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS font_size TEXT",
+    );
+    await sql.unsafe(
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS profile_background_url TEXT",
+    );
+    await sql.unsafe(
+        "ALTER TABLE posts ADD COLUMN IF NOT EXISTS is_hidden INTEGER DEFAULT 0",
+    );
+    await sql.unsafe(
+        "ALTER TABLE posts ADD COLUMN IF NOT EXISTS display_order INTEGER",
+    );
+    await sql.unsafe(
+        "ALTER TABLE posts ADD COLUMN IF NOT EXISTS post_font_family TEXT",
+    );
 };
 
 app.use(cors());
@@ -812,35 +859,6 @@ app.get("/api/posts", authenticateToken, async (req, res) => {
     }
 });
 
-app.get("/api/posts/:id", authenticateToken, async (req, res) => {
-    const { id: postId } = req.params;
-    const userId = req.user.id;
-
-    try {
-        const post = await dbGet(
-            `SELECT 
-                p.id, p.student_id, p.title, p.content, p.post_type, p.likes, p.created_at, p.media_url,
-                p.is_hidden, p.display_order, p.post_font_family,
-                s.name as student_name, s.avatar_url as student_avatar,
-                CASE WHEN EXISTS (SELECT 1 FROM likes WHERE user_id = $1 AND post_id = p.id) THEN 1 ELSE 0 END AS isLiked,
-                (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) AS comment_count
-            FROM posts p
-            JOIN students s ON p.student_id = s.id
-            WHERE p.id = $2`,
-            [userId, postId],
-        );
-
-        if (!post) {
-            return res.status(404).json({ message: "Post not found." });
-        }
-
-        return res.json(post);
-    } catch (error) {
-        console.error("Error fetching post:", error);
-        return res.status(500).json({ message: "Error fetching post." });
-    }
-});
-
 // Student directory routes
 app.get("/api/students", async (req, res) => {
     try {
@@ -1026,8 +1044,19 @@ if (process.env.NODE_ENV === "production") {
     });
 }
 
-app.listen(port, () => {
-    console.log(`Server listening on port ${port}`);
-});
+const startServer = async () => {
+    try {
+        await initializeDatabase();
+        console.log("Database schema initialization complete.");
+    } catch (error) {
+        console.error("Database schema initialization failed:", error.message);
+    }
+
+    app.listen(port, () => {
+        console.log(`Server listening on port ${port}`);
+    });
+};
+
+startServer();
 
 export default sql;
