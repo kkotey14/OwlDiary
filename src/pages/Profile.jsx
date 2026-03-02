@@ -547,7 +547,7 @@ const Profile = () => {
             const decoded = jwtDecode(token);
             setIsOwner(String(decoded.id) === String(studentId));
             setIsAdmin(decoded.role === 'admin');
-          } catch (err) {
+          } catch {
             setIsOwner(false);
             setIsAdmin(false);
           }
@@ -563,7 +563,7 @@ const Profile = () => {
     };
 
     fetchData();
-  }, [studentId]);
+  }, [studentId, navigate]);
 
   useEffect(() => {
     if (!student) return;

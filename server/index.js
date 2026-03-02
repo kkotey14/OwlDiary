@@ -22,20 +22,33 @@ const sql = postgres(process.env.DATABASE_URL, {
 });
 
 // Helper functions
-const dbGet = async (query) => {
-    const result = await query;
-    return result[0] || null;
+const executeQuery = async (query, params = []) => {
+    if (typeof query === "string") {
+        return sql.unsafe(query, params);
+    }
+    return query;
 };
 
-const dbAll = async (query) => {
-    return await query;
+const dbGet = async (query, params = []) => {
+    const result = await executeQuery(query, params);
+    return Array.isArray(result) ? result[0] || null : null;
 };
 
-const dbRun = async (query) => {
-    const result = await query;
+const dbAll = async (query, params = []) => {
+    const result = await executeQuery(query, params);
+    return Array.isArray(result) ? result : [];
+};
+
+const dbRun = async (query, params = []) => {
+    const result = await executeQuery(query, params);
     return {
-        lastID: result[0]?.id || null,
-        changes: result.count || result.length,
+        lastID: Array.isArray(result) ? result[0]?.id || null : null,
+        changes:
+            typeof result?.count === "number"
+                ? result.count
+                : Array.isArray(result)
+                  ? result.length
+                  : 0,
     };
 };
 
@@ -244,7 +257,7 @@ app.post(
         }
 
         try {
-            const result = await db.query(
+            const result = await dbRun(
                 "INSERT INTO posts (student_id, title, content, post_type, media_url, likes, created_at, is_hidden, display_order, post_font_family) VALUES ($1, $2, $3, $4, $5, 0, CURRENT_TIMESTAMP, 0, NULL, $6) RETURNING id",
                 [
                     student_id,
@@ -255,7 +268,7 @@ app.post(
                     font_family || null,
                 ],
             );
-            const newPostId = result.rows[0].id;
+            const newPostId = result.lastID;
 
             const newPost = await dbGet(
                 `SELECT 
@@ -449,34 +462,33 @@ app.put("/api/posts/reorder", authenticateToken, async (req, res) => {
         return res.status(400).json({ message: "postIds array is required." });
     }
 
-    const client = await db.connect();
     try {
-        await client.query("BEGIN");
-        for (let i = 0; i < postIds.length; i++) {
-            const postId = postIds[i];
-            const { rows } = await client.query(
-                "SELECT student_id FROM posts WHERE id = $1",
-                [postId],
-            );
-            const existingPost = rows[0];
-            if (!existingPost || existingPost.student_id !== userId) {
-                await client.query("ROLLBACK");
-                client.release();
-                return res
-                    .status(403)
-                    .json({ message: "Forbidden: Invalid post ownership." });
+        await sql.begin(async (transaction) => {
+            for (let i = 0; i < postIds.length; i += 1) {
+                const postId = postIds[i];
+                const existingRows = await transaction.unsafe(
+                    "SELECT student_id FROM posts WHERE id = $1",
+                    [postId],
+                );
+                const existingPost = existingRows[0];
+                if (
+                    !existingPost ||
+                    Number(existingPost.student_id) !== Number(userId)
+                ) {
+                    throw new Error("Forbidden: Invalid post ownership.");
+                }
+
+                await transaction.unsafe(
+                    "UPDATE posts SET display_order = $1 WHERE id = $2",
+                    [i, postId],
+                );
             }
-            await client.query(
-                "UPDATE posts SET display_order = $1 WHERE id = $2",
-                [i, postId],
-            );
-        }
-        await client.query("COMMIT");
-        client.release();
+        });
         return res.json({ success: true });
     } catch (error) {
-        await client.query("ROLLBACK");
-        client.release();
+        if (error.message === "Forbidden: Invalid post ownership.") {
+            return res.status(403).json({ message: error.message });
+        }
         console.error("Error reordering posts:", error);
         return res.status(500).json({ message: "Error reordering posts." });
     }
@@ -544,12 +556,12 @@ app.post("/api/posts/:id/comments", authenticateToken, async (req, res) => {
     }
 
     try {
-        const result = await db.query(
+        const result = await dbRun(
             "INSERT INTO comments (post_id, user_id, content) VALUES ($1, $2, $3) RETURNING id",
             [postId, userId, content.trim()],
         );
 
-        const newCommentId = result.rows[0].id;
+        const newCommentId = result.lastID;
 
         const newComment = await dbGet(
             `SELECT 

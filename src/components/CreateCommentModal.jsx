@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import styled from 'styled-components';
 import { useNavigate } from 'react-router-dom';
 import { getAuthTokenOrLogout, handleAuthFailure } from '../utils/auth';
@@ -148,7 +148,7 @@ const CreateCommentModal = ({ postId, onClose, onCommentPosted }) => {
   const [loadingComments, setLoadingComments] = useState(true);
   const navigate = useNavigate();
 
-  const fetchComments = async () => {
+  const fetchComments = useCallback(async () => {
     setLoadingComments(true);
     const token = getAuthTokenOrLogout(navigate);
     if (!token) {
@@ -181,11 +181,11 @@ const CreateCommentModal = ({ postId, onClose, onCommentPosted }) => {
     } finally {
       setLoadingComments(false);
     }
-  };
+  }, [navigate, postId]);
 
   useEffect(() => {
     fetchComments();
-  }, [postId]);
+  }, [fetchComments]);
 
   const handleSubmit = async () => {
     setError(null);
@@ -228,7 +228,7 @@ const CreateCommentModal = ({ postId, onClose, onCommentPosted }) => {
       }
 
       setCommentContent(''); // Clear input
-      setComments([...comments, data.comment]); // Add new comment to the list
+      setComments((prevComments) => [...prevComments, data.comment]); // Add new comment to the list
       onCommentPosted(data.comment); // Notify parent with the new comment
     } catch (err) {
       setError(err.message);

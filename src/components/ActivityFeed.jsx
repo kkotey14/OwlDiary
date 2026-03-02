@@ -1,6 +1,7 @@
 import React, {
     useState,
     useEffect,
+    useCallback,
     forwardRef,
     useImperativeHandle,
 } from "react";
@@ -27,7 +28,7 @@ const ActivityFeed = forwardRef(({ fetchStats, refreshTrigger }, ref) => {
     const [viewer, setViewer] = useState({ id: null, isAdmin: false });
     const navigate = useNavigate();
 
-    const fetchPosts = async () => {
+    const fetchPosts = useCallback(async () => {
         setLoading(true);
         setError(null);
         try {
@@ -58,13 +59,24 @@ const ActivityFeed = forwardRef(({ fetchStats, refreshTrigger }, ref) => {
                 throw new Error(`API error: ${response.status} - ${errorText}`);
             }
             const data = await response.json();
-            setPosts(data);
+            const normalizedPosts = Array.isArray(data)
+                ? data
+                : Array.isArray(data?.posts)
+                  ? data.posts
+                  : [];
+            if (!Array.isArray(data) && !Array.isArray(data?.posts)) {
+                const fallbackError =
+                    data?.message || data?.error || "Unexpected posts payload";
+                setError(fallbackError);
+            }
+            setPosts(normalizedPosts);
         } catch (error) {
             setError(error.message);
+            setPosts([]);
         } finally {
             setLoading(false);
         }
-    };
+    }, [navigate]);
 
     useImperativeHandle(ref, () => ({
         fetchPosts,
@@ -72,13 +84,13 @@ const ActivityFeed = forwardRef(({ fetchStats, refreshTrigger }, ref) => {
 
     useEffect(() => {
         fetchPosts();
-    }, []);
+    }, [fetchPosts]);
 
     useEffect(() => {
         if (refreshTrigger !== undefined) {
             fetchPosts();
         }
-    }, [refreshTrigger]);
+    }, [refreshTrigger, fetchPosts]);
 
     if (loading) return <p>Loading posts...</p>;
     if (error) return <p>Error loading posts: {error}</p>;
@@ -89,7 +101,7 @@ const ActivityFeed = forwardRef(({ fetchStats, refreshTrigger }, ref) => {
 
     const handleLikeSuccess = (updatedPost) => {
         setPosts((prevPosts) =>
-            prevPosts.map((post) =>
+            (Array.isArray(prevPosts) ? prevPosts : []).map((post) =>
                 post.id === updatedPost.id ? updatedPost : post,
             ),
         );
@@ -140,7 +152,7 @@ const ActivityFeed = forwardRef(({ fetchStats, refreshTrigger }, ref) => {
 
             const updatedPost = await response.json();
             setPosts((prevPosts) =>
-                prevPosts.map((currentPost) =>
+                (Array.isArray(prevPosts) ? prevPosts : []).map((currentPost) =>
                     currentPost.id === updatedPost.id
                         ? { ...currentPost, ...updatedPost }
                         : currentPost,
@@ -153,8 +165,7 @@ const ActivityFeed = forwardRef(({ fetchStats, refreshTrigger }, ref) => {
 
     return (
         <FeedContainer>
-            console.log(posts);
-            {posts.map((post) => {
+            {(Array.isArray(posts) ? posts : []).map((post) => {
                 const isOwner =
                     viewer.id !== null &&
                     String(viewer.id) === String(post.student_id);

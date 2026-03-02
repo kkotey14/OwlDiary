@@ -108,7 +108,7 @@ const Sidebar = ({ onCreatePost }) => {
     try {
       const decoded = jwtDecode(token);
       return `/profile/${decoded.id}`;
-    } catch (error) {
+    } catch {
       return '/login';
     }
   }, [navigate]);

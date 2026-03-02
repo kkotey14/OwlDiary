@@ -64,7 +64,7 @@ const ProfileHeader = ({ student, showEditButton, onEditProfile }) => {
     try {
       const decoded = jwtDecode(token);
       return String(decoded.id) === String(student.id);
-    } catch (error) {
+    } catch {
       return false;
     }
   })();

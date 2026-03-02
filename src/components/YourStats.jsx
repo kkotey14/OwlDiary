@@ -108,7 +108,6 @@ const YourStats = ({ statsRefreshTrigger }) => {
         }
         const data = await response.json();
         setStats(data);
-        console.log('Stats data:', data);
       } catch (err) {
         setError(err.message);
       } finally {
@@ -117,7 +116,7 @@ const YourStats = ({ statsRefreshTrigger }) => {
     };
 
     fetchUserStats();
-  }, [statsRefreshTrigger]); // Add statsRefreshTrigger to dependency array
+  }, [statsRefreshTrigger, navigate]); // Add statsRefreshTrigger to dependency array
 
   if (loading) return <StatsContainer><Title>Your Stats</Title><p>Loading stats...</p></StatsContainer>;
   if (error) return <StatsContainer><Title>Your Stats</Title><p>Error: {error}</p></StatsContainer>;
