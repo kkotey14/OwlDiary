@@ -97,6 +97,23 @@ const initializeDatabase = async () => {
     await sql.unsafe(
         "ALTER TABLE posts ADD COLUMN IF NOT EXISTS post_font_family TEXT",
     );
+
+    // Indexes for common feed/profile/detail queries.
+    await sql.unsafe(
+        "CREATE INDEX IF NOT EXISTS idx_posts_visibility_created_at ON posts (is_hidden, created_at DESC)",
+    );
+    await sql.unsafe(
+        "CREATE INDEX IF NOT EXISTS idx_posts_student_order_created ON posts (student_id, display_order, created_at DESC)",
+    );
+    await sql.unsafe(
+        "CREATE INDEX IF NOT EXISTS idx_comments_post_created ON comments (post_id, created_at ASC)",
+    );
+    await sql.unsafe(
+        "CREATE INDEX IF NOT EXISTS idx_likes_post_user ON likes (post_id, user_id)",
+    );
+    await sql.unsafe(
+        "CREATE INDEX IF NOT EXISTS idx_gallery_student_created ON profile_gallery (student_id, created_at DESC)",
+    );
 };
 
 app.use(cors());

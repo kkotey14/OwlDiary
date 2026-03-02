@@ -316,7 +316,8 @@ const PostPage = () => {
 
   const [post, setPost] = useState(null);
   const [comments, setComments] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [postLoading, setPostLoading] = useState(true);
+  const [commentsLoading, setCommentsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isLiked, setIsLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
@@ -325,62 +326,86 @@ const PostPage = () => {
   const [commentError, setCommentError] = useState('');
 
 
-  // Fetch post and comments
+  // Fetch post and comments independently so page content can render sooner.
   useEffect(() => {
-    const fetchAll = async () => {
+    let isMounted = true;
+    const fetchData = async () => {
       const token = getAuthTokenOrLogout(navigate);
-      if (!token) return;
-
-
-      try {
-        const [postRes, commentsRes] = await Promise.all([
-          fetch(`/api/posts/${postId}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-          fetch(`/api/posts/${postId}/comments`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-        ]);
-
-
-        if (!postRes.ok) {
-          if (handleAuthFailure(postRes.status, navigate)) return;
-          throw new Error('Post not found.');
+      if (!token) {
+        if (isMounted) {
+          setPostLoading(false);
+          setCommentsLoading(false);
         }
-        if (!commentsRes.ok) {
-          if (handleAuthFailure(commentsRes.status, navigate)) return;
-          throw new Error('Could not load comments.');
-        }
-
-
-        const postData = await postRes.json();
-        const commentsData = await commentsRes.json();
-
-
-        setPost(postData);
-        setIsLiked(postData.isLiked === 1);
-        setLikeCount(postData.likes);
-        setComments(commentsData);
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
+        return;
       }
+
+      const fetchPost = async () => {
+        try {
+          const postRes = await fetch(`/api/posts/${postId}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!postRes.ok) {
+            if (handleAuthFailure(postRes.status, navigate)) return;
+            throw new Error('Post not found.');
+          }
+          const postData = await postRes.json();
+          if (!isMounted) return;
+          setPost(postData);
+          setIsLiked(postData.isLiked === 1);
+          setLikeCount(postData.likes);
+        } catch (err) {
+          if (isMounted) {
+            setError(err.message);
+          }
+        } finally {
+          if (isMounted) {
+            setPostLoading(false);
+          }
+        }
+      };
+
+      const fetchComments = async () => {
+        try {
+          const commentsRes = await fetch(`/api/posts/${postId}/comments`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!commentsRes.ok) {
+            if (handleAuthFailure(commentsRes.status, navigate)) return;
+            throw new Error('Could not load comments.');
+          }
+          const commentsData = await commentsRes.json();
+          if (!isMounted) return;
+          setComments(Array.isArray(commentsData) ? commentsData : []);
+        } catch (err) {
+          if (isMounted) {
+            setCommentError(err.message);
+          }
+        } finally {
+          if (isMounted) {
+            setCommentsLoading(false);
+          }
+        }
+      };
+
+      fetchPost();
+      fetchComments();
     };
 
-
-    fetchAll();
+    fetchData();
+    return () => {
+      isMounted = false;
+    };
   }, [postId, navigate]);
 
   useEffect(() => {
-  if (loading) return;
+  if (postLoading) return;
   if (window.location.hash === '#comments') {
     const el = document.getElementById('comments');
     if (el) {
       el.scrollIntoView({ behavior: 'smooth' });
     }
   }
-}, [loading]);
+}, [postLoading]);
   const handleLike = async () => {
     const token = getAuthTokenOrLogout(navigate);
     if (!token) return;
@@ -450,7 +475,7 @@ const PostPage = () => {
   };
 
 
-  if (loading) return <p>Loading post...</p>;
+  if (postLoading) return <p>Loading post...</p>;
   if (error) return <p>Error: {error}</p>;
   if (!post) return <p>Post not found.</p>;
 
@@ -510,7 +535,7 @@ const PostPage = () => {
           </EngagementBtn>
           <EngagementBtn as="span">
             <FiMessageSquare />
-            <span>{comments.length}</span>
+            <span>{commentsLoading ? '...' : comments.length}</span>
           </EngagementBtn>
         </EngagementBar>
       </PostCard>
@@ -520,12 +545,13 @@ const PostPage = () => {
         <SectionTitle>Comments ({comments.length})</SectionTitle>
 
 
-        {comments.length === 0 && (
+        {commentsLoading && <EmptyComments>Loading comments...</EmptyComments>}
+
+        {!commentsLoading && comments.length === 0 && (
           <EmptyComments>No comments yet. Be the first!</EmptyComments>
         )}
 
-
-        {comments.map((comment) => (
+        {!commentsLoading && comments.map((comment) => (
           <CommentItem key={comment.id}>
             <CommentAvatar
               src={resolveMediaUrl(comment.user_avatar)}

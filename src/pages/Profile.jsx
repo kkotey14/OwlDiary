@@ -541,24 +541,14 @@ const Profile = () => {
       setError(null);
       try {
         const token = getAuthTokenOrLogout(navigate);
-        const [studentResponse, postsResponse] = await Promise.all([
-          fetch(`/api/students/${studentId}`),
-          fetch(`/api/students/${studentId}/posts`, {
-            headers: token ? { 'Authorization': `Bearer ${token}` } : undefined
-          }),
-        ]);
-
-        if (!studentResponse.ok || !postsResponse.ok) {
+        const studentResponse = await fetch(`/api/students/${studentId}`);
+        if (!studentResponse.ok) {
           throw new Error('Network response was not ok');
         }
 
         const studentData = await studentResponse.json();
-        const postsData = await postsResponse.json();
-        const normalizedPosts = Array.isArray(postsData) ? postsData : [];
-
         setStudent(studentData);
         loadedStudentIdRef.current = studentData?.id ?? null;
-        setPosts(normalizedPosts);
         setProfileName(studentData.name || '');
         setProfileBio(studentData.about_me || '');
         setAppearanceTheme(studentData.appearance_theme || 'classic');
@@ -567,12 +557,37 @@ const Profile = () => {
         setFontSize(studentData.font_size || '16px');
         const avatar = studentData.avatar_url || '';
         setAvatarPreview(resolveMediaUrl(avatar));
+        if (shouldShowPageLoader) {
+          setLoading(false);
+        }
 
         if (token) {
           try {
             const decoded = jwtDecode(token);
             setIsOwner(String(decoded.id) === String(studentId));
             setIsAdmin(decoded.role === 'admin');
+          } catch {
+            setIsOwner(false);
+            setIsAdmin(false);
+          }
+        } else {
+          setIsOwner(false);
+          setIsAdmin(false);
+        }
+
+        const postsResponse = await fetch(`/api/students/${studentId}/posts`, {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : undefined,
+        });
+        if (!postsResponse.ok) {
+          throw new Error('Failed to load posts');
+        }
+        const postsData = await postsResponse.json();
+        const normalizedPosts = Array.isArray(postsData) ? postsData : [];
+        setPosts(normalizedPosts);
+
+        if (token) {
+          try {
+            const decoded = jwtDecode(token);
             if (String(decoded.id) !== String(studentId)) {
               const latestVisiblePostAt = normalizedPosts.reduce((latest, post) => {
                 const createdAt = post?.created_at || '';
@@ -586,12 +601,8 @@ const Profile = () => {
               }
             }
           } catch {
-            setIsOwner(false);
-            setIsAdmin(false);
+            // ignore activity-dot updates when token cannot be decoded
           }
-        } else {
-          setIsOwner(false);
-          setIsAdmin(false);
         }
       } catch (error) {
         setError(error.message);
