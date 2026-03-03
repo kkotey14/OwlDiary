@@ -149,7 +149,7 @@ const PostCard = ({
   onToggleVisibility,
 }) => {
   const [currentLikes, setCurrentLikes] = useState(post.likes);
-  const [isLiked, setIsLiked] = useState(post.isLiked === 1);
+  const [isLiked, setIsLiked] = useState(post.isliked === 1);
   const navigate = useNavigate();
   const canComment = typeof onCommentClick === 'function';
   const isHidden = post.is_hidden === 1 || post.is_hidden === true;
@@ -184,7 +184,7 @@ const PostCard = ({
       const updatedPost = await response.json();
 
       setCurrentLikes(updatedPost.likes);
-      setIsLiked(!!updatedPost.isLiked);
+      setIsLiked(!!updatedPost.isliked);
       if (onLikeSuccess) {
         onLikeSuccess(updatedPost);
       }
