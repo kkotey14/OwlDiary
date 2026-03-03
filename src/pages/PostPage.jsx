@@ -474,6 +474,30 @@ const PostPage = () => {
     }
   };
 
+  const handleCommentLike = async (commentId) => {
+    const token = getAuthTokenOrLogout(navigate);
+    if (!token) return;
+
+    try {
+        const res = await fetch(`/api/comments/${commentId}/like`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+            },
+        });
+        if (!res.ok) return;
+        const updated = await res.json();
+        setComments((prev) =>
+            prev.map((c) => (c.id === commentId ? { ...c, likes: updated.likes, isliked: updated.isliked } : c))
+        );
+    } catch (err) {
+        console.error('Error liking comment:', err);
+    }
+  };
+
+  
+
 
   if (postLoading) return <p>Loading post...</p>;
   if (error) return <p>Error: {error}</p>;
@@ -561,6 +585,14 @@ const PostPage = () => {
               <CommentAuthor>{comment.user_name}</CommentAuthor>
               <CommentDate>{formatDate(comment.created_at)}</CommentDate>
               <CommentText>{comment.content}</CommentText>
+              <EngagementBtn
+                $active={comment.isliked === 1}
+                onClick={() => handleCommentLike(comment.id)}
+                style={{ marginTop: '0.5rem', fontSize: '0.8rem' }}
+              >
+                <FiHeart />
+                <span>{comment.likes || 0}</span>
+              </EngagementBtn>
             </CommentBody>
           </CommentItem>
         ))}
