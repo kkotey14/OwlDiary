@@ -5,6 +5,7 @@
     "type": "module",
     "scripts": {
         "dev": "concurrently \"vite\" \"npm run server\"",
+        "serverDev": "concurrently \"vite --host\" \"npm run server\"",
         "server": "nodemon server/index.js",
         "build": "vite build",
         "lint": "eslint .",
