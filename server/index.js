@@ -612,7 +612,7 @@ app.get("/api/posts/:id/comments", authenticateToken, async (req, res) => {
     try {
         const comments = await dbAll(
             `SELECT 
-                c.id, c.content, c.created_at,
+                c.id, c.user_id, c.content, c.created_at,
                 s.name AS user_name, s.avatar_url AS user_avatar
             FROM comments c
             JOIN students s ON c.user_id = s.id
@@ -649,7 +649,7 @@ app.post("/api/posts/:id/comments", authenticateToken, async (req, res) => {
 
         const newComment = await dbGet(
             `SELECT 
-                c.id, c.content, c.created_at,
+                c.id, c.user_id, c.content, c.created_at,
                 s.name AS user_name, s.avatar_url AS user_avatar
             FROM comments c
             JOIN students s ON c.user_id = s.id
@@ -980,6 +980,58 @@ app.get("/api/students/:id/posts", async (req, res) => {
         return res.json(rows);
     } catch (error) {
         return res.status(500).json({ error: error.message });
+    }
+});
+
+// Edit a comment
+app.put("/api/comments/:id", authenticateToken, async (req, res) => {
+    const { id: commentId } = req.params;
+    const { content } = req.body;
+    const userId = req.user.id;
+
+    if (!content || !content.trim()) {
+        return res.status(400).json({ message: "Comment content is required." });
+    }
+
+    try {
+        const existing = await dbGet("SELECT * FROM comments WHERE id = $1", [commentId]);
+        if (!existing) return res.status(404).json({ message: "Comment not found." });
+        if (existing.user_id !== userId) return res.status(403).json({ message: "Forbidden: You can only edit your own comments." });
+
+        await dbRun("UPDATE comments SET content = $1 WHERE id = $2", [content.trim(), commentId]);
+
+        const updated = await dbGet(
+            `SELECT c.id, c.content, c.created_at,
+                s.name AS user_name, s.avatar_url AS user_avatar
+            FROM comments c
+            JOIN students s ON c.user_id = s.id
+            WHERE c.id = $1`,
+            [commentId]
+        );
+
+        return res.json({ comment: updated });
+    } catch (error) {
+        console.error("Error editing comment:", error);
+        return res.status(500).json({ message: "Error editing comment." });
+    }
+});
+
+// Delete a comment
+app.delete("/api/comments/:id", authenticateToken, async (req, res) => {
+    const { id: commentId } = req.params;
+    const userId = req.user.id;
+
+    try {
+        const existing = await dbGet("SELECT * FROM comments WHERE id = $1", [commentId]);
+        if (!existing) return res.status(404).json({ message: "Comment not found." });
+        if (existing.user_id !== userId) return res.status(403).json({ message: "Forbidden: You can only delete your own comments." });
+
+        await dbRun("DELETE FROM comments WHERE id = $1", [commentId]);
+
+        return res.json({ success: true });
+    } catch (error) {
+        console.error("Error deleting comment:", error);
+        return res.status(500).json({ message: "Error deleting comment." });
     }
 });
 
