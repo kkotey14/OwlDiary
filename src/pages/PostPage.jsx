@@ -576,7 +576,7 @@ const PostPage = () => {
         if (!res.ok) return;
         const updated = await res.json();
         setComments((prev) =>
-            prev.map((c) => (c.id === commentId ? { ...c, likes: updated.likes, isliked: updated.isliked } : c))
+            prev.map((c) => (c.id === commentId ? { ...c, likes: updated.likes, isLiked: updated.isLiked } : c))
         );
     } catch (err) {
         console.error('Error liking comment:', err);
@@ -733,7 +733,7 @@ const handleDeleteComment = async (commentId) => {
               )}
               <CommentActions>
                 <EngagementBtn
-                  $active={comment.isliked === 1}
+                  $active={comment.isLiked === 1}
                   onClick={() => handleCommentLike(comment.id)}
                   style={{ fontSize: '0.8rem' }}
                 >
