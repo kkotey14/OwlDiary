@@ -5,7 +5,7 @@ import { resolveMediaUrl } from '../utils/media';
 import { useNavigate, Link } from 'react-router-dom';
 import { getAuthTokenOrLogout, handleAuthFailure } from '../utils/auth';
 
-const Card = styled.div`
+const Card = styled(Link)`
   background: white;
   border-radius: 16px;
   padding: 1.5rem;
@@ -57,10 +57,7 @@ const PostTitle = styled.h3`
   color: #2c3e50;
 `;
 
-const PostTitleLink = styled(Link)`
-  text-decoration: none;
-  color: inherit;
-`;
+
 
 const PostMedia = styled.div`
   margin: 15px 0;
@@ -158,7 +155,10 @@ const PostCard = ({
   const isHidden = post.is_hidden === 1 || post.is_hidden === true;
   const postFont = post.post_font_family || 'inherit';
 
-  const handleLike = async () => {
+  const handleLike = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
     const token = getAuthTokenOrLogout(navigate);
     if (!token) {
       return;
@@ -199,7 +199,7 @@ const PostCard = ({
   const getMediaUrl = (url) => resolveMediaUrl(url);
 
   return (
-    <Card id={`post-${post.id}`} $isHidden={isHidden}>
+    <Card to={`/post/${post.id}`} id={`post-${post.id}`} $isHidden={isHidden}>
       <HeaderRow>
         <AuthorInfo>
           <Avatar src={resolveMediaUrl(post.student_avatar)} alt={post.student_name} />
@@ -211,22 +211,22 @@ const PostCard = ({
         {(canEdit || canHide) && (
           <OwnerActions>
             {canHide && (
-              <OwnerButton onClick={() => onToggleVisibility && onToggleVisibility(post)}>
+              <OwnerButton onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleVisibility && onToggleVisibility(post); }}>
                 {isHidden ? 'Unhide' : 'Hide'}
               </OwnerButton>
             )}
             {canEdit && (
               <>
-                <OwnerButton onClick={() => onEdit && onEdit(post)}>Edit</OwnerButton>
-                <OwnerButton onClick={() => onDelete && onDelete(post)}>Delete</OwnerButton>
+                <OwnerButton onClick={(e) => { e.preventDefault(); e.stopPropagation(); onEdit && onEdit(post); }}>Edit</OwnerButton>
+                <OwnerButton onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete && onDelete(post); }}>Delete</OwnerButton>
               </>
             )}
           </OwnerActions>
         )}
       </HeaderRow>
-      <PostTitleLink to={`/post/${post.id}`}>
-        <PostTitle style={{ fontFamily: postFont }}>{post.title}</PostTitle>
-      </PostTitleLink>
+
+      <PostTitle style={{ fontFamily: postFont }}>{post.title}</PostTitle>
+
       {post.media_url && (
         <PostMedia>
           {post.post_type === 'image' && <img src={getMediaUrl(post.media_url)} alt="Post media" />}
@@ -243,6 +243,7 @@ const PostCard = ({
         <EngagementIcon
           onClick={(e) => {
             e.preventDefault();
+            e.stopPropagation();
             if (canComment) onCommentClick(post.id);
             navigate(`/post/${post.id}#comments`);
           }}>

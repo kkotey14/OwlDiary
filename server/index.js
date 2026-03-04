@@ -98,6 +98,28 @@ const initializeDatabase = async () => {
         "ALTER TABLE posts ADD COLUMN IF NOT EXISTS post_font_family TEXT",
     );
 
+    // Comment likes table
+await sql.unsafe(
+    `CREATE TABLE IF NOT EXISTS comment_likes (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES students(id),
+        comment_id INTEGER NOT NULL REFERENCES comments(id),
+        UNIQUE(user_id, comment_id)
+    )`
+    );
+
+    // likes column on comments table
+    await sql.unsafe(
+        "ALTER TABLE comments ADD COLUMN IF NOT EXISTS likes INTEGER DEFAULT 0"
+    );
+
+    // index for performance
+    await sql.unsafe(
+        "CREATE INDEX IF NOT EXISTS idx_comment_likes_comment_user ON comment_likes (comment_id, user_id)"
+    );
+
+
+
     // Indexes for common feed/profile/detail queries.
     await sql.unsafe(
         "CREATE INDEX IF NOT EXISTS idx_posts_visibility_created_at ON posts (is_hidden, created_at DESC)",
@@ -612,7 +634,7 @@ app.get("/api/posts/:id/comments", authenticateToken, async (req, res) => {
     try {
         const comments = await dbAll(
             `SELECT 
-                c.id, c.content, c.created_at,
+                c.id, c.user_id, c.content, c.created_at,
                 s.name AS user_name, s.avatar_url AS user_avatar
             FROM comments c
             JOIN students s ON c.user_id = s.id
@@ -649,7 +671,7 @@ app.post("/api/posts/:id/comments", authenticateToken, async (req, res) => {
 
         const newComment = await dbGet(
             `SELECT 
-                c.id, c.content, c.created_at,
+                c.id, c.user_id, c.content, c.created_at,
                 s.name AS user_name, s.avatar_url AS user_avatar
             FROM comments c
             JOIN students s ON c.user_id = s.id
@@ -980,6 +1002,107 @@ app.get("/api/students/:id/posts", async (req, res) => {
         return res.json(rows);
     } catch (error) {
         return res.status(500).json({ error: error.message });
+    }
+});
+
+// Edit a comment
+app.put("/api/comments/:id", authenticateToken, async (req, res) => {
+    const { id: commentId } = req.params;
+    const { content } = req.body;
+    const userId = req.user.id;
+
+    if (!content || !content.trim()) {
+        return res.status(400).json({ message: "Comment content is required." });
+    }
+
+    try {
+        const existing = await dbGet("SELECT * FROM comments WHERE id = $1", [commentId]);
+        if (!existing) return res.status(404).json({ message: "Comment not found." });
+        if (existing.user_id !== userId) return res.status(403).json({ message: "Forbidden: You can only edit your own comments." });
+
+        await dbRun("UPDATE comments SET content = $1 WHERE id = $2", [content.trim(), commentId]);
+
+        const updated = await dbGet(
+            `SELECT c.id, c.content, c.created_at,
+                s.name AS user_name, s.avatar_url AS user_avatar
+            FROM comments c
+            JOIN students s ON c.user_id = s.id
+            WHERE c.id = $1`,
+            [commentId]
+        );
+
+        return res.json({ comment: updated });
+    } catch (error) {
+        console.error("Error editing comment:", error);
+        return res.status(500).json({ message: "Error editing comment." });
+    }
+});
+
+// Delete a comment
+app.delete("/api/comments/:id", authenticateToken, async (req, res) => {
+    const { id: commentId } = req.params;
+    const userId = req.user.id;
+
+    try {
+        const existing = await dbGet("SELECT * FROM comments WHERE id = $1", [commentId]);
+        if (!existing) return res.status(404).json({ message: "Comment not found." });
+        if (existing.user_id !== userId) return res.status(403).json({ message: "Forbidden: You can only delete your own comments." });
+
+        await dbRun("DELETE FROM comments WHERE id = $1", [commentId]);
+
+        return res.json({ success: true });
+    } catch (error) {
+        console.error("Error deleting comment:", error);
+        return res.status(500).json({ message: "Error deleting comment." });
+    }
+});
+
+//Like a comment
+app.post("/api/comments/:id/like", authenticateToken, async (req, res) => {
+    const { id: commentId } = req.params;
+    const userId = req.user.id;
+
+    try {
+        const existingLike = await dbGet(
+            "SELECT * FROM comment_likes WHERE user_id = $1 AND comment_id = $2",
+            [userId, commentId]
+        );
+
+        if (existingLike) {
+            await dbRun(
+                "DELETE FROM comment_likes WHERE user_id = $1 AND comment_id = $2",
+                [userId, commentId]
+            );
+            await dbRun("UPDATE comments SET likes = likes - 1 WHERE id = $1", [commentId]);
+        } else {
+            await dbRun(
+                "INSERT INTO comment_likes (user_id, comment_id) VALUES ($1, $2)",
+                [userId, commentId]
+            );
+            await dbRun("UPDATE comments SET likes = likes + 1 WHERE id = $1", [commentId]);
+        }
+
+        const updatedComment = await dbGet(
+            `SELECT 
+                c.id, c.user_id, c.content, c.created_at, c.likes,
+                s.name AS user_name, s.avatar_url AS user_avatar,
+                CASE WHEN EXISTS (
+                    SELECT 1 FROM comment_likes WHERE user_id = $1 AND comment_id = c.id
+                ) THEN 1 ELSE 0 END AS isLiked
+            FROM comments c
+            JOIN students s ON c.user_id = s.id
+            WHERE c.id = $2`,
+            [userId, commentId]
+        );
+
+        if (!updatedComment) {
+            return res.status(404).json({ message: "Comment not found." });
+        }
+
+        return res.json(updatedComment);
+    } catch (error) {
+        console.error("Error toggling comment like:", error);
+        return res.status(500).json({ message: "Error toggling comment like." });
     }
 });
 

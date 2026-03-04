@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import styled from 'styled-components';
-import { FiHeart, FiMessageSquare, FiArrowLeft } from 'react-icons/fi';
+import { FiHeart, FiMessageSquare, FiArrowLeft, FiEdit2, FiTrash2 } from 'react-icons/fi';
 import { resolveMediaUrl } from '../utils/media';
 import { getAuthTokenOrLogout, handleAuthFailure } from '../utils/auth';
+import { jwtDecode } from 'jwt-decode';
 
 
 // ─── Styled Components ────────────────────────────────────────────────────────
@@ -227,6 +228,81 @@ const CommentText = styled.p`
   line-height: 1.5;
 `;
 
+const CommentActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+`;
+
+const CommentActionBtn = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #aab;
+  font-size: 0.8rem;
+  padding: 0;
+  transition: color 0.2s;
+
+  &:hover {
+    color: ${(props) => (props.$danger ? '#ff6b6b' : 'var(--primary-teal)')};
+  }
+`;
+
+const EditInput = styled.textarea`
+  width: 100%;
+  border: 1px solid #dfe6ee;
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9rem;
+  resize: vertical;
+  min-height: 60px;
+  outline: none;
+  font-family: inherit;
+  color: #2c3e50;
+  margin-top: 0.5rem;
+  box-sizing: border-box;
+
+  &:focus {
+    border-color: var(--primary-teal);
+    box-shadow: 0 0 0 3px rgba(26, 188, 156, 0.12);
+  }
+`;
+
+const EditActions = styled.div`
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+`;
+
+const SaveBtn = styled.button`
+  border: none;
+  background: var(--primary-teal);
+  color: white;
+  padding: 0.35rem 0.75rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: background 0.2s;
+
+  &:hover { background: #12737b; }
+`;
+
+const CancelBtn = styled.button`
+  border: 1px solid #dfe6ee;
+  background: white;
+  color: #6b7a90;
+  padding: 0.35rem 0.75rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: background 0.2s;
+
+  &:hover { background: #f0f2f5; }
+`;
 
 const CommentForm = styled.div`
   display: flex;
@@ -325,6 +401,17 @@ const PostPage = () => {
   const [submitting, setSubmitting] = useState(false);
   const [commentError, setCommentError] = useState('');
 
+  const [editingCommentId, setEditingCommentId] = useState(null);
+  const [editingText, setEditingText] = useState('');
+  const currentUserId = (() => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return null;
+      return jwtDecode(token).id;
+    } catch {
+      return null;
+    }
+  })();
 
   // Fetch post and comments independently so page content can render sooner.
   useEffect(() => {
@@ -474,6 +561,76 @@ const PostPage = () => {
     }
   };
 
+  const handleCommentLike = async (commentId) => {
+    const token = getAuthTokenOrLogout(navigate);
+    if (!token) return;
+
+    try {
+        const res = await fetch(`/api/comments/${commentId}/like`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+            },
+        });
+        if (!res.ok) return;
+        const updated = await res.json();
+        setComments((prev) =>
+            prev.map((c) => (c.id === commentId ? { ...c, likes: updated.likes, isLiked: updated.isLiked } : c))
+        );
+    } catch (err) {
+        console.error('Error liking comment:', err);
+    }
+  };
+
+  const handleEditComment = (comment) => {
+  setEditingCommentId(comment.id);
+  setEditingText(comment.content);
+};
+
+const handleSaveEdit = async (commentId) => {
+  const token = getAuthTokenOrLogout(navigate);
+  if (!token) return;
+
+  try {
+    const res = await fetch(`/api/comments/${commentId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ content: editingText }),
+    });
+    if (!res.ok) return;
+    const { comment: updated } = await res.json();
+    setComments((prev) =>
+      prev.map((c) => (c.id === commentId ? { ...c, content: updated.content } : c))
+    );
+    setEditingCommentId(null);
+    setEditingText('');
+  } catch (err) {
+    console.error('Error editing comment:', err);
+  }
+};
+
+const handleDeleteComment = async (commentId) => {
+  if (!window.confirm('Are you sure you want to delete this comment?')) return;
+  const token = getAuthTokenOrLogout(navigate);
+  if (!token) return;
+
+  try {
+    const res = await fetch(`/api/comments/${commentId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return;
+    setComments((prev) => prev.filter((c) => c.id !== commentId));
+  } catch (err) {
+    console.error('Error deleting comment:', err);
+  }
+};
+  
+
 
   if (postLoading) return <p>Loading post...</p>;
   if (error) return <p>Error: {error}</p>;
@@ -560,7 +717,40 @@ const PostPage = () => {
             <CommentBody>
               <CommentAuthor>{comment.user_name}</CommentAuthor>
               <CommentDate>{formatDate(comment.created_at)}</CommentDate>
-              <CommentText>{comment.content}</CommentText>
+              {editingCommentId === comment.id ? (
+                <>
+                  <EditInput
+                    value={editingText}
+                    onChange={(e) => setEditingText(e.target.value)}
+                  />
+                  <EditActions>
+                    <SaveBtn onClick={() => handleSaveEdit(comment.id)}>Save</SaveBtn>
+                    <CancelBtn onClick={() => setEditingCommentId(null)}>Cancel</CancelBtn>
+                  </EditActions>
+                </>
+              ) : (
+                <CommentText>{comment.content}</CommentText>
+              )}
+              <CommentActions>
+                <EngagementBtn
+                  $active={comment.isLiked === 1}
+                  onClick={() => handleCommentLike(comment.id)}
+                  style={{ fontSize: '0.8rem' }}
+                >
+                  <FiHeart />
+                  <span>{comment.likes || 0}</span>
+                </EngagementBtn>
+                {String(currentUserId) === String(comment.user_id) && (
+                  <>
+                    <CommentActionBtn onClick={() => handleEditComment(comment)}>
+                      <FiEdit2 /> Edit
+                    </CommentActionBtn>
+                    <CommentActionBtn $danger onClick={() => handleDeleteComment(comment.id)}>
+                      <FiTrash2 /> Delete
+                    </CommentActionBtn>
+                  </>
+                )}
+              </CommentActions>
             </CommentBody>
           </CommentItem>
         ))}
