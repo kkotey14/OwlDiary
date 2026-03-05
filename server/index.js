@@ -202,7 +202,10 @@ const galleryUpload = multer({
         if (file.mimetype.startsWith("image/")) {
             cb(null, true);
         } else {
-            cb(new Error("Only image files are allowed for gallery uploads."), false);
+            cb(
+                new Error("Only image files are allowed for gallery uploads."),
+                false,
+            );
         }
     },
 });
@@ -705,7 +708,9 @@ app.put(
         const userId = req.user.id;
         const avatarFile = req.files?.avatar?.[0];
         const backgroundFile = req.files?.profile_background?.[0];
-        const avatar_url = avatarFile ? `/uploads/${avatarFile.filename}` : null;
+        const avatar_url = avatarFile
+            ? `/uploads/${avatarFile.filename}`
+            : null;
         const profile_background_url = backgroundFile
             ? `/uploads/${backgroundFile.filename}`
             : null;
@@ -1192,7 +1197,7 @@ const startServer = async () => {
         console.error("Database schema initialization failed:", error.message);
     }
 
-    app.listen(port, () => {
+    app.listen(port, "0.0.0.0", () => {
         console.log(`Server listening on port ${port}`);
     });
 };
