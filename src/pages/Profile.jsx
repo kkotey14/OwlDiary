@@ -209,9 +209,9 @@ const CropFrameBackground = styled.div`
 `;
 
 const CropImage = styled.img`
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+  position: absolute;
+  top: 50%;
+  left: 50%;
   transform-origin: center center;
   user-select: none;
   -webkit-user-drag: none;
@@ -232,7 +232,8 @@ const CropEditorCard = styled.div`
 
 const CropEditorFrame = styled.div`
   width: 100%;
-  height: ${(props) => (props.$avatar ? '280px' : '220px')};
+  height: ${(props) => (props.$avatar ? '280px' : 'auto')};
+  aspect-ratio: ${(props) => (props.$avatar ? '1 / 1' : '16 / 5')};
   border-radius: ${(props) => (props.$avatar ? '50%' : '12px')};
   overflow: hidden;
   border: 2px solid #e6eef8;
@@ -240,7 +241,8 @@ const CropEditorFrame = styled.div`
   touch-action: none;
   cursor: ${(props) => (props.$dragging ? 'grabbing' : 'grab')};
   align-self: center;
-  max-width: ${(props) => (props.$avatar ? '280px' : '100%')};
+  max-width: ${(props) => (props.$avatar ? '280px' : '520px')};
+  position: relative;
 `;
 
 const CropHint = styled.p`
@@ -303,10 +305,12 @@ const Profile = () => {
     target: null,
     file: null,
     sourceUrl: '',
+    imageSize: { width: 1, height: 1 },
     adjust: { zoom: 1, x: 0, y: 0 },
   });
   const [applyingCrop, setApplyingCrop] = useState(false);
   const [isCropDragging, setIsCropDragging] = useState(false);
+  const [cropFrameSize, setCropFrameSize] = useState({ width: 0, height: 0 });
   const fileInputRef = useRef(null);
   const backgroundInputRef = useRef(null);
   const cropEditorFrameRef = useRef(null);
@@ -629,6 +633,23 @@ const Profile = () => {
 
   const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
+  const getViewportCropMetrics = (adjust, frame, source) => {
+    const frameWidth = frame?.width || 1;
+    const frameHeight = frame?.height || 1;
+    const sourceWidth = source?.width || 1;
+    const sourceHeight = source?.height || 1;
+    const zoom = clamp(Number(adjust?.zoom) || 1, 1, 3);
+    const baseScale = Math.min(frameWidth / sourceWidth, frameHeight / sourceHeight);
+    const drawWidth = sourceWidth * baseScale * zoom;
+    const drawHeight = sourceHeight * baseScale * zoom;
+    const maxPanX = Math.max(0, (drawWidth - frameWidth) / 2);
+    const maxPanY = Math.max(0, (drawHeight - frameHeight) / 2);
+    const offsetX = (clamp(Number(adjust?.x) || 0, -100, 100) / 100) * maxPanX;
+    const offsetY = (clamp(Number(adjust?.y) || 0, -100, 100) / 100) * maxPanY;
+
+    return { drawWidth, drawHeight, offsetX, offsetY };
+  };
+
   const getPointer = (event) => {
     if (event.touches && event.touches[0]) return event.touches[0];
     if (event.changedTouches && event.changedTouches[0]) return event.changedTouches[0];
@@ -688,59 +709,50 @@ const Profile = () => {
     };
   }, [cropModal.open]);
 
+  useEffect(() => {
+    if (!cropModal.open) return;
+    const frame = cropEditorFrameRef.current;
+    if (!frame) return;
+
+    const updateFrameSize = () => {
+      setCropFrameSize({
+        width: frame.clientWidth || 0,
+        height: frame.clientHeight || 0,
+      });
+    };
+
+    updateFrameSize();
+    const observer = new ResizeObserver(updateFrameSize);
+    observer.observe(frame);
+    window.addEventListener('resize', updateFrameSize);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateFrameSize);
+    };
+  }, [cropModal.open, cropModal.target]);
+
   const createCroppedFile = async (file, adjust, output, outputName) => {
     const objectUrl = URL.createObjectURL(file);
     try {
       const image = await loadImage(objectUrl);
-      const outputAspect = output.width / output.height;
-      const imageAspect = image.width / image.height;
-
-      const baseCrop =
-        imageAspect > outputAspect
-          ? {
-              width: image.height * outputAspect,
-              height: image.height,
-              x: (image.width - image.height * outputAspect) / 2,
-              y: 0,
-            }
-          : {
-              width: image.width,
-              height: image.width / outputAspect,
-              x: 0,
-              y: (image.height - image.width / outputAspect) / 2,
-            };
-
-      const zoom = clamp(Number(adjust.zoom) || 1, 1, 3);
-      const cropWidth = baseCrop.width / zoom;
-      const cropHeight = baseCrop.height / zoom;
-      const baseCenterX = baseCrop.x + baseCrop.width / 2;
-      const baseCenterY = baseCrop.y + baseCrop.height / 2;
-
-      const maxPanX = (baseCrop.width - cropWidth) / 2;
-      const maxPanY = (baseCrop.height - cropHeight) / 2;
-      const panX = (clamp(Number(adjust.x) || 0, -100, 100) / 100) * maxPanX;
-      const panY = (clamp(Number(adjust.y) || 0, -100, 100) / 100) * maxPanY;
-
-      let sourceX = baseCenterX - cropWidth / 2 + panX;
-      let sourceY = baseCenterY - cropHeight / 2 + panY;
-
-      sourceX = clamp(sourceX, baseCrop.x, baseCrop.x + baseCrop.width - cropWidth);
-      sourceY = clamp(sourceY, baseCrop.y, baseCrop.y + baseCrop.height - cropHeight);
-
       const canvas = document.createElement('canvas');
       canvas.width = output.width;
       canvas.height = output.height;
       const context = canvas.getContext('2d');
+      context.fillStyle = '#f5f7fb';
+      context.fillRect(0, 0, output.width, output.height);
+      const metrics = getViewportCropMetrics(
+        adjust,
+        { width: output.width, height: output.height },
+        { width: image.width, height: image.height },
+      );
       context.drawImage(
         image,
-        sourceX,
-        sourceY,
-        cropWidth,
-        cropHeight,
-        0,
-        0,
-        output.width,
-        output.height,
+        (output.width - metrics.drawWidth) / 2 + metrics.offsetX,
+        (output.height - metrics.drawHeight) / 2 + metrics.offsetY,
+        metrics.drawWidth,
+        metrics.drawHeight,
       );
 
       const blob = await new Promise((resolve) =>
@@ -758,18 +770,37 @@ const Profile = () => {
 
   const openCropModal = (target, file) => {
     const sourceUrl = URL.createObjectURL(file);
-    setCropModal((prev) => {
-      if (prev.sourceUrl && prev.sourceUrl.startsWith('blob:')) {
-        URL.revokeObjectURL(prev.sourceUrl);
-      }
-      return {
-        open: true,
-        target,
-        file,
-        sourceUrl,
-        adjust: { zoom: 1, x: 0, y: 0 },
-      };
-    });
+    loadImage(sourceUrl)
+      .then((image) => {
+        setCropModal((prev) => {
+          if (prev.sourceUrl && prev.sourceUrl.startsWith('blob:')) {
+            URL.revokeObjectURL(prev.sourceUrl);
+          }
+          return {
+            open: true,
+            target,
+            file,
+            sourceUrl,
+            imageSize: { width: image.width, height: image.height },
+            adjust: { zoom: 1, x: 0, y: 0 },
+          };
+        });
+      })
+      .catch(() => {
+        setCropModal((prev) => {
+          if (prev.sourceUrl && prev.sourceUrl.startsWith('blob:')) {
+            URL.revokeObjectURL(prev.sourceUrl);
+          }
+          return {
+            open: true,
+            target,
+            file,
+            sourceUrl,
+            imageSize: { width: 1, height: 1 },
+            adjust: { zoom: 1, x: 0, y: 0 },
+          };
+        });
+      });
   };
 
   const closeCropModal = () => {
@@ -783,6 +814,7 @@ const Profile = () => {
       target: null,
       file: null,
       sourceUrl: '',
+      imageSize: { width: 1, height: 1 },
       adjust: { zoom: 1, x: 0, y: 0 },
     });
   };
@@ -1209,6 +1241,11 @@ const Profile = () => {
   const activeFont = fontOptions[fontFamily]?.stack || fontOptions.inter.stack;
   const accentHex = accentColor && accentColor.match(/^#([0-9a-fA-F]{6})$/) ? accentColor : activeTheme.accent;
   const modeTheme = { ...activeTheme, accent: accentHex, accentDark: accentHex };
+  const cropPreviewMetrics = getViewportCropMetrics(
+    cropModal.adjust,
+    cropFrameSize,
+    cropModal.imageSize,
+  );
 
   return (
     <ProfileShell
@@ -1378,7 +1415,9 @@ const Profile = () => {
                 src={cropModal.sourceUrl}
                 alt="Crop preview"
                 style={{
-                  transform: `translate(${cropModal.adjust.x}%, ${cropModal.adjust.y}%) scale(${cropModal.adjust.zoom})`,
+                  width: `${cropPreviewMetrics.drawWidth}px`,
+                  height: `${cropPreviewMetrics.drawHeight}px`,
+                  transform: `translate(calc(-50% + ${cropPreviewMetrics.offsetX}px), calc(-50% + ${cropPreviewMetrics.offsetY}px))`,
                 }}
               />
             </CropEditorFrame>
