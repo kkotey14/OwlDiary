@@ -49,8 +49,8 @@ const dbRun = async (query, params = []) => {
             typeof result?.count === "number"
                 ? result.count
                 : Array.isArray(result)
-                  ? result.length
-                  : 0,
+                ? result.length
+                : 0,
     };
 };
 

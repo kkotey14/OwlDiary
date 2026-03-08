@@ -1,6 +1,11 @@
 import React from "react";
 import styled from "styled-components";
-import { FiDownload, FiExternalLink, FiShield, FiDatabase } from "react-icons/fi";
+import {
+    FiDownload,
+    FiExternalLink,
+    FiShield,
+    FiDatabase,
+} from "react-icons/fi";
 import { exportUserData } from "../utils/FetchData.js";
 
 const SettingsPage = styled.div`
@@ -97,7 +102,9 @@ const ActionButton = styled.button`
     font-size: 0.95rem;
     font-weight: 600;
     cursor: pointer;
-    transition: background-color 0.18s ease, opacity 0.18s ease;
+    transition:
+        background-color 0.18s ease,
+        opacity 0.18s ease;
 
     &:hover {
         background: #1d4ed8;
@@ -180,8 +187,7 @@ const Settings = () => {
     const handleExportData = async () => {
         setDialog({
             title: "Export Data?",
-            message:
-                `This will download your posts and comments as a JSON file.\n\n${dataSafetyMessage}`,
+            message: `This will download your posts and comments as a JSON file.\n\n${dataSafetyMessage}`,
             confirmLabel: "Continue Export",
             onConfirm: async () => {
                 closeDialog();
@@ -195,8 +201,7 @@ const Settings = () => {
     const handleAccountSettings = () => {
         setDialog({
             title: "Open Account Portal?",
-            message:
-                `This opens the SCSU account settings page in a new tab.\n\n${dataSafetyMessage}`,
+            message: `This opens the SCSU account settings page in a new tab.`,
             confirmLabel: "Open Portal",
             onConfirm: () => {
                 closeDialog();
@@ -225,12 +230,15 @@ const Settings = () => {
         });
     };
 
+    const adminsettings = () => {
+
     return (
         <SettingsPage>
             <SettingsHeader>
                 <PageTitle>Settings</PageTitle>
                 <Subtitle>
-                    Manage your account tools, export your data, and open organization-level account controls.
+                    Manage your account tools, export your data, and open
+                    organization-level account controls.
                 </Subtitle>
             </SettingsHeader>
 
@@ -243,7 +251,8 @@ const Settings = () => {
                         <CardTitle>Data Export</CardTitle>
                     </CardHeader>
                     <CardDescription>
-                        Download your posts, comments, and profile metadata as a JSON snapshot for backup or transfer.
+                        Download your posts, comments, and profile metadata as a
+                        JSON snapshot for backup or transfer.
                     </CardDescription>
                     <ActionButton
                         onClick={handleExportData}
@@ -262,7 +271,8 @@ const Settings = () => {
                         <CardTitle>Account Portal</CardTitle>
                     </CardHeader>
                     <CardDescription>
-                        Open your organization account center to update security settings, sign-in methods, and profile controls.
+                        Open your organization account center to update security
+                        settings, sign-in methods, and profile controls.
                     </CardDescription>
                     <ActionButton
                         onClick={handleAccountSettings}
@@ -279,7 +289,9 @@ const Settings = () => {
                         <ModalMessage>{dialog.message}</ModalMessage>
                         <ModalActions>
                             {dialog.cancelLabel !== null && (
-                                <SecondaryButton onClick={closeDialog}>Cancel</SecondaryButton>
+                                <SecondaryButton onClick={closeDialog}>
+                                    Cancel
+                                </SecondaryButton>
                             )}
                             <ModalPrimaryButton onClick={dialog.onConfirm}>
                                 {dialog.confirmLabel || "Continue"}

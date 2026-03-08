@@ -23,4 +23,4 @@ export ADMIN_PASSWORD
 export ADMIN_NAME
 
 echo "Starting server with admin bootstrap..."
-exec npm run server
+exec npm run dev
