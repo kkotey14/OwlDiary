@@ -97,6 +97,15 @@ const initializeDatabase = async () => {
     await sql.unsafe(
         "ALTER TABLE posts ADD COLUMN IF NOT EXISTS post_font_family TEXT",
     );
+    await sql.unsafe(
+        "ALTER TABLE profile_gallery ADD COLUMN IF NOT EXISTS title TEXT",
+    );
+    await sql.unsafe(
+        "ALTER TABLE profile_gallery ADD COLUMN IF NOT EXISTS description TEXT",
+    );
+    await sql.unsafe(
+        "ALTER TABLE profile_gallery ADD COLUMN IF NOT EXISTS display_order INTEGER",
+    );
 
     // Indexes for common feed/profile/detail queries.
     await sql.unsafe(
@@ -113,6 +122,9 @@ const initializeDatabase = async () => {
     );
     await sql.unsafe(
         "CREATE INDEX IF NOT EXISTS idx_gallery_student_created ON profile_gallery (student_id, created_at DESC)",
+    );
+    await sql.unsafe(
+        "CREATE INDEX IF NOT EXISTS idx_gallery_student_order_created ON profile_gallery (student_id, display_order, created_at DESC)",
     );
 };
 
@@ -911,7 +923,10 @@ app.get("/api/students/:id/gallery", async (req, res) => {
     const { id } = req.params;
     try {
         const rows = await dbAll(
-            "SELECT id, student_id, photo_url, created_at FROM profile_gallery WHERE student_id = $1 ORDER BY created_at DESC, id DESC",
+            `SELECT id, student_id, photo_url, title, description, display_order, created_at
+             FROM profile_gallery
+             WHERE student_id = $1
+             ORDER BY (display_order IS NULL) ASC, display_order ASC, created_at DESC, id DESC`,
             [id],
         );
         return res.json(rows);
@@ -926,18 +941,30 @@ app.post(
     galleryUpload.single("photo"),
     async (req, res) => {
         const userId = req.user.id;
+        const title = (req.body?.title || "").trim();
+        const description = (req.body?.description || "").trim();
         if (!req.file) {
             return res.status(400).json({ error: "Photo file is required." });
         }
 
         try {
             const photoUrl = `/uploads/${req.file.filename}`;
+            const lastOrder = await dbGet(
+                "SELECT COALESCE(MAX(display_order), -1) AS max_order FROM profile_gallery WHERE student_id = $1",
+                [userId],
+            );
             const result = await dbRun(
-                "INSERT INTO profile_gallery (student_id, photo_url) VALUES ($1, $2) RETURNING id",
-                [userId, photoUrl],
+                "INSERT INTO profile_gallery (student_id, photo_url, display_order, title, description) VALUES ($1, $2, $3, $4, $5) RETURNING id",
+                [
+                    userId,
+                    photoUrl,
+                    Number(lastOrder?.max_order ?? -1) + 1,
+                    title || null,
+                    description || null,
+                ],
             );
             const photo = await dbGet(
-                "SELECT id, student_id, photo_url, created_at FROM profile_gallery WHERE id = $1",
+                "SELECT id, student_id, photo_url, title, description, display_order, created_at FROM profile_gallery WHERE id = $1",
                 [result.lastID],
             );
             return res.status(201).json(photo);
@@ -946,6 +973,73 @@ app.post(
         }
     },
 );
+
+app.put("/api/profile/gallery/reorder", authenticateToken, async (req, res) => {
+    const userId = req.user.id;
+    const { photoIds } = req.body || {};
+    if (!Array.isArray(photoIds) || photoIds.length === 0) {
+        return res.status(400).json({ error: "photoIds array is required." });
+    }
+
+    try {
+        const owned = await dbAll(
+            "SELECT id FROM profile_gallery WHERE student_id = $1",
+            [userId],
+        );
+        const ownedSet = new Set(owned.map((row) => Number(row.id)));
+        const incomingSet = new Set(photoIds.map((id) => Number(id)));
+        if (incomingSet.size !== ownedSet.size) {
+            return res.status(400).json({ error: "photoIds must include all gallery photos." });
+        }
+        for (const id of incomingSet) {
+            if (!ownedSet.has(id)) {
+                return res.status(403).json({ error: "Invalid gallery photo list." });
+            }
+        }
+
+        for (let index = 0; index < photoIds.length; index += 1) {
+            await dbRun(
+                "UPDATE profile_gallery SET display_order = $1 WHERE id = $2 AND student_id = $3",
+                [index, Number(photoIds[index]), userId],
+            );
+        }
+        return res.json({ message: "Gallery reordered successfully." });
+    } catch (error) {
+        return res.status(500).json({ error: error.message });
+    }
+});
+
+app.put("/api/profile/gallery/:id", authenticateToken, async (req, res) => {
+    const userId = req.user.id;
+    const photoId = Number(req.params.id);
+    const title = (req.body?.title || "").trim();
+    const description = (req.body?.description || "").trim();
+    if (!Number.isInteger(photoId) || photoId <= 0) {
+        return res.status(400).json({ error: "Invalid gallery photo id." });
+    }
+
+    try {
+        const existing = await dbGet(
+            "SELECT id FROM profile_gallery WHERE id = $1 AND student_id = $2",
+            [photoId, userId],
+        );
+        if (!existing) {
+            return res.status(404).json({ error: "Gallery photo not found." });
+        }
+
+        await dbRun(
+            "UPDATE profile_gallery SET title = $1, description = $2 WHERE id = $3 AND student_id = $4",
+            [title || null, description || null, photoId, userId],
+        );
+        const updated = await dbGet(
+            "SELECT id, student_id, photo_url, title, description, display_order, created_at FROM profile_gallery WHERE id = $1",
+            [photoId],
+        );
+        return res.json(updated);
+    } catch (error) {
+        return res.status(500).json({ error: error.message });
+    }
+});
 
 app.get("/api/students/:id/posts", async (req, res) => {
     const { id } = req.params;
