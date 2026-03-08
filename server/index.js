@@ -54,6 +54,14 @@ const dbRun = async (query, params = []) => {
     };
 };
 
+const createNotification = async (userId, message, linkUrl = null) => {
+    if (!userId || !message) return;
+    await dbRun(
+        "INSERT INTO notifications (user_id, message, is_read, link_url, created_at) VALUES ($1, $2, 0, $3, CURRENT_TIMESTAMP)",
+        [userId, message, linkUrl],
+    );
+};
+
 const initializeDatabase = async () => {
     const schema = fs.readFileSync(SCHEMA_PATH, "utf8");
     const cleanedSchema = schema
@@ -415,6 +423,14 @@ app.post("/api/posts/:id/like", authenticateToken, async (req, res) => {
     const userId = req.user.id;
 
     try {
+        const postOwner = await dbGet(
+            "SELECT p.student_id, p.title, s.name AS owner_name FROM posts p JOIN students s ON p.student_id = s.id WHERE p.id = $1",
+            [postId],
+        );
+        if (!postOwner) {
+            return res.status(404).json({ message: "Post not found." });
+        }
+
         const existingLike = await dbGet(
             "SELECT * FROM likes WHERE user_id = $1 AND post_id = $2",
             [userId, postId],
@@ -436,6 +452,17 @@ app.post("/api/posts/:id/like", authenticateToken, async (req, res) => {
             await dbRun("UPDATE posts SET likes = likes + 1 WHERE id = $1", [
                 postId,
             ]);
+            if (Number(postOwner.student_id) !== Number(userId)) {
+                const actor = await dbGet(
+                    "SELECT name FROM students WHERE id = $1",
+                    [userId],
+                );
+                await createNotification(
+                    postOwner.student_id,
+                    `${actor?.name || "Someone"} liked your post "${postOwner.title || "Untitled"}"`,
+                    `/post/${postId}`,
+                );
+            }
         }
 
         const updatedPost = await dbGet(
@@ -677,6 +704,14 @@ app.post("/api/posts/:id/comments", authenticateToken, async (req, res) => {
     }
 
     try {
+        const postOwner = await dbGet(
+            "SELECT p.student_id, p.title FROM posts p WHERE p.id = $1",
+            [postId],
+        );
+        if (!postOwner) {
+            return res.status(404).json({ message: "Post not found." });
+        }
+
         const result = await dbRun(
             "INSERT INTO comments (post_id, user_id, content) VALUES ($1, $2, $3) RETURNING id",
             [postId, userId, content.trim()],
@@ -693,6 +728,14 @@ app.post("/api/posts/:id/comments", authenticateToken, async (req, res) => {
             WHERE c.id = $1`,
             [newCommentId],
         );
+
+        if (Number(postOwner.student_id) !== Number(userId)) {
+            await createNotification(
+                postOwner.student_id,
+                `${newComment?.user_name || "Someone"} commented on your post "${postOwner.title || "Untitled"}"`,
+                `/post/${postId}#comments`,
+            );
+        }
 
         return res.status(201).json({ comment: newComment });
     } catch (error) {
@@ -941,6 +984,52 @@ app.get("/api/students/:id", async (req, res) => {
             return res.status(404).json({ error: "Student not found" });
         }
         return res.json(row);
+    } catch (error) {
+        return res.status(500).json({ error: error.message });
+    }
+});
+
+app.get("/api/notifications", authenticateToken, async (req, res) => {
+    const userId = req.user.id;
+    try {
+        const rows = await dbAll(
+            `SELECT id, user_id, message, is_read, link_url, created_at
+             FROM notifications
+             WHERE user_id = $1
+             ORDER BY created_at DESC
+             LIMIT 40`,
+            [userId],
+        );
+        return res.json(rows);
+    } catch (error) {
+        return res.status(500).json({ error: error.message });
+    }
+});
+
+app.put("/api/notifications/:id/read", authenticateToken, async (req, res) => {
+    const userId = req.user.id;
+    const notificationId = Number(req.params.id);
+    if (!Number.isInteger(notificationId) || notificationId <= 0) {
+        return res.status(400).json({ error: "Invalid notification id." });
+    }
+    try {
+        await dbRun(
+            "UPDATE notifications SET is_read = 1 WHERE id = $1 AND user_id = $2",
+            [notificationId, userId],
+        );
+        return res.json({ success: true });
+    } catch (error) {
+        return res.status(500).json({ error: error.message });
+    }
+});
+
+app.put("/api/notifications/read-all", authenticateToken, async (req, res) => {
+    const userId = req.user.id;
+    try {
+        await dbRun("UPDATE notifications SET is_read = 1 WHERE user_id = $1", [
+            userId,
+        ]);
+        return res.json({ success: true });
     } catch (error) {
         return res.status(500).json({ error: error.message });
     }
