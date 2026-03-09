@@ -121,6 +121,11 @@ const OwnerButton = styled.button`
   &:hover {
     background: #e1e6ee;
   }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
 `;
 
 const HiddenBadge = styled.span`
@@ -147,6 +152,10 @@ const PostCard = ({
   onEdit,
   onDelete,
   onToggleVisibility,
+  onMoveUp,
+  onMoveDown,
+  canMoveUp,
+  canMoveDown,
 }) => {
   const [currentLikes, setCurrentLikes] = useState(post.likes);
   const [isLiked, setIsLiked] = useState(post.isLiked === 1);
@@ -217,6 +226,24 @@ const PostCard = ({
             )}
             {canEdit && (
               <>
+                <OwnerButton
+                  disabled={!canMoveUp}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onMoveUp && onMoveUp(post);
+                  }}>
+                  Up
+                </OwnerButton>
+                <OwnerButton
+                  disabled={!canMoveDown}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onMoveDown && onMoveDown(post);
+                  }}>
+                  Down
+                </OwnerButton>
                 <OwnerButton onClick={(e) => { e.preventDefault(); e.stopPropagation(); onEdit && onEdit(post); }}>Edit</OwnerButton>
                 <OwnerButton onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete && onDelete(post); }}>Delete</OwnerButton>
               </>

@@ -23,6 +23,24 @@ const Title = styled.h4`
   color: #0f172a;
 `;
 
+const HeaderRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+`;
+
+const MarkAllButton = styled.button`
+  border: none;
+  background: transparent;
+  color: #2563eb;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+`;
+
 const List = styled.div`
   display: flex;
   flex-direction: column;
@@ -32,7 +50,7 @@ const List = styled.div`
 const Item = styled.button`
   text-align: left;
   border: none;
-  background: #f8fafc;
+  background: ${(props) => (props.$unread ? '#e8f0ff' : '#f8fafc')};
   padding: 0.65rem 0.75rem;
   border-radius: 10px;
   cursor: pointer;
@@ -52,17 +70,24 @@ const Empty = styled.div`
   text-align: center;
 `;
 
-const NotificationDropdown = ({ notifications, onSelect }) => {
+const NotificationDropdown = ({ notifications, onSelect, onMarkAllRead, loading }) => {
   return (
     <Dropdown>
-      <Title>Notifications</Title>
+      <HeaderRow>
+        <Title>Notifications</Title>
+        {notifications.length > 0 && (
+          <MarkAllButton type="button" onClick={onMarkAllRead} disabled={loading}>
+            Mark all read
+          </MarkAllButton>
+        )}
+      </HeaderRow>
       {notifications.length === 0 ? (
         <Empty>No notifications yet.</Empty>
       ) : (
         <List>
           {notifications.map((note) => (
-            <Item key={note.id} onClick={() => onSelect(note)}>
-              {note.text}
+            <Item key={note.id} $unread={Number(note.is_read) !== 1} onClick={() => onSelect(note)}>
+              {note.message || note.text}
             </Item>
           ))}
         </List>

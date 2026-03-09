@@ -187,6 +187,15 @@ const SectionTitle = styled.h2`
 const CommentItem = styled.div`
   display: flex;
   gap: 0.75rem;
+  padding: 0.25rem;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background-color 0.18s ease;
+  background: ${(props) => (props.$active ? 'rgba(26, 188, 156, 0.12)' : 'transparent')};
+
+  &:hover {
+    background: rgba(15, 23, 42, 0.04);
+  }
 `;
 
 
@@ -400,6 +409,7 @@ const PostPage = () => {
   const [commentText, setCommentText] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [commentError, setCommentError] = useState('');
+  const [activeCommentId, setActiveCommentId] = useState(null);
 
   const [editingCommentId, setEditingCommentId] = useState(null);
   const [editingText, setEditingText] = useState('');
@@ -485,14 +495,37 @@ const PostPage = () => {
   }, [postId, navigate]);
 
   useEffect(() => {
-  if (postLoading) return;
-  if (window.location.hash === '#comments') {
+  if (postLoading || commentsLoading) return;
+  const hash = window.location.hash || '';
+
+  if (hash.startsWith('#comment-')) {
+    const targetId = hash.slice(1);
+    const target = document.getElementById(targetId);
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const commentId = targetId.replace('comment-', '');
+      setActiveCommentId(commentId);
+    }
+    return;
+  }
+
+  if (hash === '#comments') {
     const el = document.getElementById('comments');
     if (el) {
       el.scrollIntoView({ behavior: 'smooth' });
     }
   }
-}, [postLoading]);
+}, [postLoading, commentsLoading, comments.length]);
+
+  const handleCommentClick = (commentId) => {
+    const targetId = `comment-${commentId}`;
+    const target = document.getElementById(targetId);
+    setActiveCommentId(String(commentId));
+    window.history.replaceState(null, '', `#${targetId}`);
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  };
   const handleLike = async () => {
     const token = getAuthTokenOrLogout(navigate);
     if (!token) return;
@@ -709,7 +742,11 @@ const handleDeleteComment = async (commentId) => {
         )}
 
         {!commentsLoading && comments.map((comment) => (
-          <CommentItem key={comment.id}>
+          <CommentItem
+            key={comment.id}
+            id={`comment-${comment.id}`}
+            $active={String(activeCommentId) === String(comment.id)}
+            onClick={() => handleCommentClick(comment.id)}>
             <CommentAvatar
               src={resolveMediaUrl(comment.user_avatar)}
               alt={comment.user_name}
