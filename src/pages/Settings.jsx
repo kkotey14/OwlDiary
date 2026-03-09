@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import styled from "styled-components";
 import {
     FiDownload,
@@ -7,6 +7,7 @@ import {
     FiDatabase,
 } from "react-icons/fi";
 import { exportUserData } from "../utils/FetchData.js";
+import { getAuthTokenOrLogout } from "../utils/auth";
 
 const SettingsPage = styled.div`
     margin: -2.5rem;
@@ -176,8 +177,30 @@ const ModalPrimaryButton = styled(ActionButton)`
 `;
 
 const Settings = () => {
+    const [loading, setLoading] = React.useState(true);
     const [exporting, setExporting] = React.useState(false);
     const [dialog, setDialog] = React.useState(null);
+    const [user, setUser] = React.useState(null);
+
+    useEffect(() => {
+        const token = getAuthTokenOrLogout();
+
+        fetch("/api/me", {
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        })
+            .then((res) => res.json())
+            .then((data) => {
+                setUser(data);
+                setLoading(false);
+            })
+            .catch(() => {
+                setLoading(false);
+            });
+    }, []);
+
+    const isAdmin = user?.role === "admin";
 
     const closeDialog = () => setDialog(null);
 
@@ -230,7 +253,40 @@ const Settings = () => {
         });
     };
 
-    const adminsettings = () => {
+    const adminCreationButton = async () => {
+        const email = prompt("New admin email:");
+        const password = prompt("New admin password:");
+        const name = prompt("Admin name (optional):");
+
+        if (!email || !password) {
+            alert("Email and password are required.");
+            return;
+        }
+
+        try {
+            const res = await fetch("/api/admin/create-admin", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                credentials: "include",
+                body: JSON.stringify({ email, password, name }),
+            });
+
+            const data = await res.json();
+
+            if (data.success) {
+                alert("Admin created successfully");
+            } else {
+                alert(data.error || "Failed to create admin");
+            }
+        } catch (error) {
+            console.error("Admin creation failed:", error);
+        }
+    };
+    if (loading) {
+        return <div>Loading settings...</div>;
+    }
 
     return (
         <SettingsPage>
@@ -281,6 +337,25 @@ const Settings = () => {
                         Account Settings
                     </ActionButton>
                 </SettingCard>
+
+                {isAdmin && (
+                    <SettingCard>
+                        <CardHeader>
+                            <IconBadge>
+                                <FiShield size={17} />
+                            </IconBadge>
+                            <CardTitle>Admin Creation</CardTitle>
+                        </CardHeader>
+
+                        <CardDescription>
+                            Create additional administrators for the platform.
+                        </CardDescription>
+
+                        <ActionButton onClick={adminCreationButton}>
+                            Create Admin
+                        </ActionButton>
+                    </SettingCard>
+                )}
             </SettingsGrid>
             {dialog && (
                 <ModalOverlay onClick={closeDialog}>

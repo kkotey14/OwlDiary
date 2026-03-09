@@ -9,7 +9,8 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import multer from "multer";
 import postgres from "postgres";
-// test comment
+import { RequireAdmin } from "./middleware/RequireAdmin.js";
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -49,8 +50,8 @@ const dbRun = async (query, params = []) => {
             typeof result?.count === "number"
                 ? result.count
                 : Array.isArray(result)
-                ? result.length
-                : 0,
+                  ? result.length
+                  : 0,
     };
 };
 
@@ -979,11 +980,9 @@ app.put("/api/comments/:id", authenticateToken, async (req, res) => {
         if (!existing)
             return res.status(404).json({ message: "Comment not found." });
         if (existing.user_id !== userId)
-            return res
-                .status(403)
-                .json({
-                    message: "Forbidden: You can only edit your own comments.",
-                });
+            return res.status(403).json({
+                message: "Forbidden: You can only edit your own comments.",
+            });
 
         await dbRun("UPDATE comments SET content = $1 WHERE id = $2", [
             content.trim(),
@@ -1018,12 +1017,9 @@ app.delete("/api/comments/:id", authenticateToken, async (req, res) => {
         if (!existing)
             return res.status(404).json({ message: "Comment not found." });
         if (existing.user_id !== userId)
-            return res
-                .status(403)
-                .json({
-                    message:
-                        "Forbidden: You can only delete your own comments.",
-                });
+            return res.status(403).json({
+                message: "Forbidden: You can only delete your own comments.",
+            });
 
         await dbRun("DELETE FROM comments WHERE id = $1", [commentId]);
 
@@ -1086,6 +1082,41 @@ app.post("/api/comments/:id/like", authenticateToken, async (req, res) => {
         return res
             .status(500)
             .json({ message: "Error toggling comment like." });
+    }
+});
+
+//create admine route
+app.post("/api/create-admin", RequireAdmin, async (req, res) => {
+    const { name, email, password } = req.body;
+
+    try {
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const avatar_url = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`;
+        const about_me = "Admin account";
+
+        await dbRun(sql`
+            INSERT INTO students (name, email, password, avatar_url, about_me, role)
+            VALUES (${name}, ${email}, ${hashedPassword}, ${avatar_url}, ${about_me}, 'admin')
+        `);
+
+        res.json({ message: "Admin created" });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Failed to create admin" });
+    }
+});
+
+app.get("/api/me", authenticateToken, async (req, res) => {
+    try {
+        const user = await dbGet(
+            "SELECT id, name, email, role FROM students WHERE id = $1",
+            [req.user.id],
+        );
+
+        res.json(user);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Failed to fetch user." });
     }
 });
 
