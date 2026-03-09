@@ -6,7 +6,7 @@ import {
     FiExternalLink,
     FiShield,
     FiDatabase,
-    FiList
+    FiList,
 } from "react-icons/fi";
 import { exportUserData } from "../utils/FetchData.js";
 import { getAuthTokenOrLogout } from "../utils/auth";
@@ -200,19 +200,26 @@ const Settings = () => {
                 const meRes = await fetch("/api/me", {
                     headers: { Authorization: `Bearer ${token}` },
                 });
-                
+
                 if (meRes.ok) {
                     const me = await meRes.json();
                     setUser(me);
 
                     // If admin, fetch pending count
                     if (me.role === "admin") {
-                        const pendingRes = await fetch("/api/students/pending", {
-                            headers: { Authorization: `Bearer ${token}` },
-                        });
+                        const pendingRes = await fetch(
+                            "/api/students/pending",
+                            {
+                                headers: { Authorization: `Bearer ${token}` },
+                            },
+                        );
                         if (pendingRes.ok) {
                             const pendingData = await pendingRes.json();
-                            setPendingCount(Array.isArray(pendingData) ? pendingData.length : 0);
+                            setPendingCount(
+                                Array.isArray(pendingData)
+                                    ? pendingData.length
+                                    : 0,
+                            );
                         }
                     }
                 }
@@ -322,6 +329,24 @@ const Settings = () => {
             );
         }
         return result;
+    };
+
+    const refreshPendingCount = async () => {
+        const token = getAuthTokenOrLogout(navigate);
+        if (!token) return;
+
+        try {
+            const res = await fetch("/api/students/pending", {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                setPendingCount(Array.isArray(data) ? data.length : 0);
+            }
+        } catch (error) {
+            console.error("Error refreshing pending count:", error);
+        }
     };
 
     const handleGenerateCode = async () => {
@@ -484,6 +509,7 @@ const Settings = () => {
                 {showStudentModal && (
                     <StudentAcceptanceModal
                         onClose={() => setShowStudentModal(false)}
+                        refreshPendingCount={refreshPendingCount}
                     />
                 )}
             </SettingsGrid>

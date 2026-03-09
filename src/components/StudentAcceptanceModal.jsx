@@ -97,9 +97,11 @@ const ButtonGroup = styled.div`
 `;
 
 const ActionBtn = styled.button`
-    background: ${(props) => (props.$kind === "danger" ? "#fef2f2" : "#ecfdf5")};
+    background: ${(props) =>
+        props.$kind === "danger" ? "#fef2f2" : "#ecfdf5"};
     color: ${(props) => (props.$kind === "danger" ? "#b91c1c" : "#047857")};
-    border: 1px solid ${(props) => (props.$kind === "danger" ? "#fecaca" : "#bbf7d0")};
+    border: 1px solid
+        ${(props) => (props.$kind === "danger" ? "#fecaca" : "#bbf7d0")};
     padding: 0.44rem 0.74rem;
     border-radius: 8px;
     font-size: 0.82rem;
@@ -161,7 +163,7 @@ const PageText = styled.span`
     font-weight: 600;
 `;
 
-const StudentAcceptanceModal = ({ onClose }) => {
+const StudentAcceptanceModal = ({ onClose, refreshPendingCount }) => {
     const navigate = useNavigate();
 
     const [students, setStudents] = useState([]);
@@ -213,6 +215,7 @@ const StudentAcceptanceModal = ({ onClose }) => {
             setBusyId(null);
             return;
         }
+        refreshPendingCount();
 
         const updated = students.filter((s) => s.id !== id);
 
@@ -238,6 +241,7 @@ const StudentAcceptanceModal = ({ onClose }) => {
             setBusyId(null);
             return;
         }
+        refreshPendingCount();
 
         const updated = students.filter((s) => s.id !== id);
 
@@ -263,6 +267,8 @@ const StudentAcceptanceModal = ({ onClose }) => {
             if (!res.ok) return;
 
             setStudents([]);
+
+            refreshPendingCount();
         } catch (err) {
             console.error("Error approving all students:", err);
         } finally {
@@ -286,7 +292,9 @@ const StudentAcceptanceModal = ({ onClose }) => {
                 </Header>
 
                 {students.length > 0 && (
-                    <ApproveAllBtn onClick={approveAll} disabled={busyAll}>
+                    <ApproveAllBtn
+                        onClick={approveAll}
+                        disabled={busyAll}>
                         Approve All
                     </ApproveAllBtn>
                 )}
