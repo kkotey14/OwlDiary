@@ -17,12 +17,13 @@ const ModalOverlay = styled.div`
 
 const ModalCard = styled.div`
     width: 100%;
-    max-width: 600px;
+    max-width: 620px;
     max-height: 80vh;
     border-radius: 12px;
-    background: white;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
     box-shadow: 0 12px 30px rgba(15, 23, 42, 0.2);
-    padding: 1.5rem;
+    padding: 1rem;
     display: flex;
     flex-direction: column;
     position: relative;
@@ -30,56 +31,134 @@ const ModalCard = styled.div`
 
 const CloseButton = styled.button`
     position: absolute;
-    top: 1rem;
-    right: 1rem;
-    border: none;
-    background: none;
+    top: 0.9rem;
+    right: 0.9rem;
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    background: #ffffff;
+    color: #475569;
     cursor: pointer;
+`;
+
+const Header = styled.div`
+    border-bottom: 1px solid #e5e7eb;
+    padding: 0.1rem 0.1rem 0.8rem;
+`;
+
+const Title = styled.h3`
+    margin: 0;
+    color: #1f2937;
+    font-size: 1.05rem;
+`;
+
+const Meta = styled.p`
+    margin: 0.35rem 0 0;
+    color: #6b7280;
+    font-size: 0.88rem;
+`;
+
+const CountBadge = styled.span`
+    margin-left: 0.5rem;
+    padding: 0.12rem 0.45rem;
+    border-radius: 999px;
+    background: #eef2f7;
+    color: #475569;
+    font-size: 0.78rem;
+    font-weight: 600;
+`;
+
+const ListWrap = styled.div`
+    margin-top: 0.9rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    overflow-y: auto;
+    max-height: 52vh;
+    padding-right: 0.1rem;
 `;
 
 const StudentRow = styled.div`
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0.75rem;
-    border-bottom: 1px solid #e5e7eb;
+    gap: 0.8rem;
+    padding: 0.8rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    background: #ffffff;
 `;
 
 const ButtonGroup = styled.div`
     display: flex;
     gap: 0.5rem;
+    flex-shrink: 0;
 `;
 
-const ApproveBtn = styled.button`
-    background: #10b981;
-    color: white;
-    border: none;
-    padding: 6px 12px;
-    border-radius: 6px;
+const ActionBtn = styled.button`
+    background: ${(props) => (props.$kind === "danger" ? "#fef2f2" : "#ecfdf5")};
+    color: ${(props) => (props.$kind === "danger" ? "#b91c1c" : "#047857")};
+    border: 1px solid ${(props) => (props.$kind === "danger" ? "#fecaca" : "#bbf7d0")};
+    padding: 0.44rem 0.74rem;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    font-weight: 600;
     cursor: pointer;
+    opacity: ${(props) => (props.disabled ? 0.6 : 1)};
 `;
 
-const DenyBtn = styled.button`
-    background: #ef4444;
-    color: white;
-    border: none;
-    padding: 6px 12px;
-    border-radius: 6px;
-    cursor: pointer;
-`;
 const ApproveAllBtn = styled.button`
     background: #2563eb;
     color: white;
     border: none;
-    padding: 8px 14px;
-    border-radius: 6px;
+    padding: 0.52rem 0.86rem;
+    border-radius: 8px;
+    font-size: 0.86rem;
+    font-weight: 600;
     cursor: pointer;
     margin-top: 0.75rem;
-    margin-bottom: 1rem;
+    align-self: flex-start;
+    opacity: ${(props) => (props.disabled ? 0.6 : 1)};
 
     &:hover {
         background: #1d4ed8;
     }
+`;
+
+const EmptyState = styled.div`
+    margin-top: 0.9rem;
+    border: 1px dashed #cbd5e1;
+    border-radius: 10px;
+    color: #6b7280;
+    padding: 1rem;
+    text-align: center;
+    font-size: 0.92rem;
+`;
+
+const FooterRow = styled.div`
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.7rem;
+    margin-top: 0.8rem;
+`;
+
+const PagerBtn = styled.button`
+    border: 1px solid #d1d5db;
+    background: white;
+    color: #374151;
+    padding: 0.4rem 0.72rem;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    opacity: ${(props) => (props.disabled ? 0.5 : 1)};
+`;
+
+const PageText = styled.span`
+    font-size: 0.85rem;
+    color: #6b7280;
+    font-weight: 600;
 `;
 
 const StudentAcceptanceModal = ({ onClose }) => {
@@ -87,6 +166,8 @@ const StudentAcceptanceModal = ({ onClose }) => {
 
     const [students, setStudents] = useState([]);
     const [page, setPage] = useState(1);
+    const [busyId, setBusyId] = useState(null);
+    const [busyAll, setBusyAll] = useState(false);
 
     const limit = 10;
 
@@ -121,13 +202,17 @@ const StudentAcceptanceModal = ({ onClose }) => {
     const approveStudent = async (id) => {
         const token = getAuthTokenOrLogout(navigate);
         if (!token) return;
+        setBusyId(id);
 
         const res = await fetch(`/api/students/${id}/approve`, {
             method: "POST",
             headers: { Authorization: `Bearer ${token}` },
         });
 
-        if (!res.ok) return;
+        if (!res.ok) {
+            setBusyId(null);
+            return;
+        }
 
         const updated = students.filter((s) => s.id !== id);
 
@@ -136,18 +221,23 @@ const StudentAcceptanceModal = ({ onClose }) => {
         } else {
             setStudents(updated);
         }
+        setBusyId(null);
     };
 
     const denyStudent = async (id) => {
         const token = getAuthTokenOrLogout(navigate);
         if (!token) return;
+        setBusyId(id);
 
         const res = await fetch(`/api/students/${id}/deny`, {
             method: "POST",
             headers: { Authorization: `Bearer ${token}` },
         });
 
-        if (!res.ok) return;
+        if (!res.ok) {
+            setBusyId(null);
+            return;
+        }
 
         const updated = students.filter((s) => s.id !== id);
 
@@ -156,11 +246,13 @@ const StudentAcceptanceModal = ({ onClose }) => {
         } else {
             setStudents(updated);
         }
+        setBusyId(null);
     };
 
     const approveAll = async () => {
         const token = getAuthTokenOrLogout(navigate);
         if (!token) return;
+        setBusyAll(true);
 
         try {
             const res = await fetch("/api/students/approve-all", {
@@ -173,6 +265,8 @@ const StudentAcceptanceModal = ({ onClose }) => {
             setStudents([]);
         } catch (err) {
             console.error("Error approving all students:", err);
+        } finally {
+            setBusyAll(false);
         }
     };
 
@@ -183,19 +277,25 @@ const StudentAcceptanceModal = ({ onClose }) => {
                     <FiX size={20} />
                 </CloseButton>
 
-                <h3>Pending Student Approvals ({students.length})</h3>
+                <Header>
+                    <Title>
+                        Pending Student Approvals
+                        <CountBadge>{students.length}</CountBadge>
+                    </Title>
+                    <Meta>Review and approve registration requests.</Meta>
+                </Header>
 
                 {students.length > 0 && (
-                    <ApproveAllBtn onClick={approveAll}>
+                    <ApproveAllBtn onClick={approveAll} disabled={busyAll}>
                         Approve All
                     </ApproveAllBtn>
                 )}
 
                 {students.length === 0 ? (
-                    <p style={{ marginTop: "1rem" }}>No pending students.</p>
+                    <EmptyState>No pending students.</EmptyState>
                 ) : (
                     <>
-                        <div style={{ marginTop: "1rem" }}>
+                        <ListWrap>
                             {students.map((student) => (
                                 <StudentRow key={student.id}>
                                     <div>
@@ -210,46 +310,42 @@ const StudentAcceptanceModal = ({ onClose }) => {
                                     </div>
 
                                     <ButtonGroup>
-                                        <ApproveBtn
+                                        <ActionBtn
+                                            disabled={busyId === student.id}
                                             onClick={() =>
                                                 approveStudent(student.id)
                                             }>
                                             Approve
-                                        </ApproveBtn>
+                                        </ActionBtn>
 
-                                        <DenyBtn
+                                        <ActionBtn
+                                            $kind="danger"
+                                            disabled={busyId === student.id}
                                             onClick={() =>
                                                 denyStudent(student.id)
                                             }>
                                             Deny
-                                        </DenyBtn>
+                                        </ActionBtn>
                                     </ButtonGroup>
                                 </StudentRow>
                             ))}
-                        </div>
+                        </ListWrap>
 
-                        {/* Pagination */}
-                        <div
-                            style={{
-                                display: "flex",
-                                justifyContent: "center",
-                                gap: "1rem",
-                                marginTop: "1rem",
-                            }}>
-                            <button
+                        <FooterRow>
+                            <PagerBtn
                                 disabled={page === 1}
                                 onClick={() => setPage((p) => p - 1)}>
                                 Previous
-                            </button>
+                            </PagerBtn>
 
-                            <span>Page {page}</span>
+                            <PageText>Page {page}</PageText>
 
-                            <button
+                            <PagerBtn
                                 disabled={students.length < limit}
                                 onClick={() => setPage((p) => p + 1)}>
                                 Next
-                            </button>
-                        </div>
+                            </PagerBtn>
+                        </FooterRow>
                     </>
                 )}
             </ModalCard>
