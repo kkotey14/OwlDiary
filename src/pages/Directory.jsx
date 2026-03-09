@@ -109,6 +109,11 @@ const Directory = () => {
   }, []);
 
   const filteredStudents = useMemo(() => {
+    const getFirstName = (fullName = '') => {
+      const parts = fullName.trim().split(/\s+/).filter(Boolean);
+      return parts.length > 0 ? parts[0].toLowerCase() : '';
+    };
+
     const normalized = query.trim().toLowerCase();
     const list = normalized
       ? students.filter((student) => {
@@ -122,7 +127,14 @@ const Directory = () => {
     return [...list].sort((a, b) => {
       const aAdmin = a.role === 'admin' ? 1 : 0;
       const bAdmin = b.role === 'admin' ? 1 : 0;
-      return bAdmin - aAdmin;
+      if (aAdmin !== bAdmin) return bAdmin - aAdmin;
+
+      const aFirst = getFirstName(a.name || '');
+      const bFirst = getFirstName(b.name || '');
+      const firstNameCompare = aFirst.localeCompare(bFirst);
+      if (firstNameCompare !== 0) return firstNameCompare;
+
+      return (a.name || '').localeCompare(b.name || '');
     });
   }, [students, query]);
 

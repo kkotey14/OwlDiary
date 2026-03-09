@@ -166,6 +166,91 @@ const PreviewRow = styled.div`
   gap: 1rem;
 `;
 
+const CropControls = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  width: 100%;
+`;
+
+const CropRow = styled.div`
+  display: grid;
+  grid-template-columns: 90px 1fr auto;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.82rem;
+  color: var(--profile-muted, #6b7a90);
+`;
+
+const CropRange = styled.input`
+  width: 100%;
+`;
+
+const CropFrameAvatar = styled.div`
+  width: 110px;
+  height: 110px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid #e6eef8;
+  background: #f5f7fb;
+  flex-shrink: 0;
+  touch-action: none;
+`;
+
+const CropFrameBackground = styled.div`
+  width: 100%;
+  max-width: 100%;
+  height: 180px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 2px solid #e6eef8;
+  background: #f5f7fb;
+  touch-action: none;
+`;
+
+const CropImage = styled.img`
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform-origin: center center;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+`;
+
+const CropEditorCard = styled.div`
+  background: var(--profile-card, white);
+  border-radius: 16px;
+  padding: 1.2rem;
+  width: 92%;
+  max-width: 560px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+`;
+
+const CropEditorFrame = styled.div`
+  width: 100%;
+  height: ${(props) => (props.$avatar ? '280px' : 'auto')};
+  aspect-ratio: ${(props) => (props.$avatar ? '1 / 1' : '16 / 5')};
+  border-radius: ${(props) => (props.$avatar ? '50%' : '12px')};
+  overflow: hidden;
+  border: 2px solid #e6eef8;
+  background: #f5f7fb;
+  touch-action: none;
+  cursor: ${(props) => (props.$dragging ? 'grabbing' : 'grab')};
+  align-self: center;
+  max-width: ${(props) => (props.$avatar ? '280px' : '520px')};
+  position: relative;
+`;
+
+const CropHint = styled.p`
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--profile-muted, #6b7a90);
+`;
+
 const AvatarPreview = styled.img`
   width: 84px;
   height: 84px;
@@ -215,8 +300,27 @@ const Profile = () => {
   const [profileBackgroundFile, setProfileBackgroundFile] = useState(null);
   const [profileBackgroundPreview, setProfileBackgroundPreview] = useState('');
   const [profileError, setProfileError] = useState('');
+  const [cropModal, setCropModal] = useState({
+    open: false,
+    target: null,
+    file: null,
+    sourceUrl: '',
+    imageSize: { width: 1, height: 1 },
+    adjust: { zoom: 1, x: 0, y: 0 },
+  });
+  const [applyingCrop, setApplyingCrop] = useState(false);
+  const [isCropDragging, setIsCropDragging] = useState(false);
+  const [cropFrameSize, setCropFrameSize] = useState({ width: 0, height: 0 });
   const fileInputRef = useRef(null);
   const backgroundInputRef = useRef(null);
+  const cropEditorFrameRef = useRef(null);
+  const cropDragRef = useRef({
+    active: false,
+    startX: 0,
+    startY: 0,
+    baseX: 0,
+    baseY: 0,
+  });
   const [editingPost, setEditingPost] = useState(null);
   const [editTitle, setEditTitle] = useState('');
   const [editContent, setEditContent] = useState('');
@@ -519,6 +623,237 @@ const Profile = () => {
     return `${url}${separator}v=${Date.now()}`;
   };
 
+  const loadImage = (src) =>
+    new Promise((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = reject;
+      image.src = src;
+    });
+
+  const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+  const getViewportCropMetrics = (adjust, frame, source) => {
+    const frameWidth = frame?.width || 1;
+    const frameHeight = frame?.height || 1;
+    const sourceWidth = source?.width || 1;
+    const sourceHeight = source?.height || 1;
+    const zoom = clamp(Number(adjust?.zoom) || 1, 1, 3);
+    const baseScale = Math.min(frameWidth / sourceWidth, frameHeight / sourceHeight);
+    const drawWidth = sourceWidth * baseScale * zoom;
+    const drawHeight = sourceHeight * baseScale * zoom;
+    const maxPanX = Math.max(0, (drawWidth - frameWidth) / 2);
+    const maxPanY = Math.max(0, (drawHeight - frameHeight) / 2);
+    const offsetX = (clamp(Number(adjust?.x) || 0, -100, 100) / 100) * maxPanX;
+    const offsetY = (clamp(Number(adjust?.y) || 0, -100, 100) / 100) * maxPanY;
+
+    return { drawWidth, drawHeight, offsetX, offsetY };
+  };
+
+  const getPointer = (event) => {
+    if (event.touches && event.touches[0]) return event.touches[0];
+    if (event.changedTouches && event.changedTouches[0]) return event.changedTouches[0];
+    return event;
+  };
+
+  const startCropDrag = (event) => {
+    if (!cropModal.open) return;
+    event.preventDefault();
+    const point = getPointer(event);
+    setIsCropDragging(true);
+    cropDragRef.current = {
+      active: true,
+      startX: point.clientX,
+      startY: point.clientY,
+      baseX: cropModal.adjust.x,
+      baseY: cropModal.adjust.y,
+    };
+  };
+
+  useEffect(() => {
+    const moveDrag = (event) => {
+      const state = cropDragRef.current;
+      if (!cropModal.open || !state.active) return;
+      event.preventDefault();
+
+      const point = getPointer(event);
+      const frame = cropEditorFrameRef.current;
+      if (!frame) return;
+
+      const dx = point.clientX - state.startX;
+      const dy = point.clientY - state.startY;
+      const width = frame.clientWidth || 1;
+      const height = frame.clientHeight || 1;
+      const nextX = clamp(state.baseX + (dx / width) * 100, -100, 100);
+      const nextY = clamp(state.baseY + (dy / height) * 100, -100, 100);
+
+      setCropModal((prev) => ({
+        ...prev,
+        adjust: { ...prev.adjust, x: nextX, y: nextY },
+      }));
+    };
+
+    const endDrag = () => {
+      setIsCropDragging(false);
+      cropDragRef.current = { active: false, startX: 0, startY: 0, baseX: 0, baseY: 0 };
+    };
+
+    window.addEventListener('pointermove', moveDrag, { passive: false });
+    window.addEventListener('pointerup', endDrag);
+    window.addEventListener('pointercancel', endDrag);
+
+    return () => {
+      window.removeEventListener('pointermove', moveDrag);
+      window.removeEventListener('pointerup', endDrag);
+      window.removeEventListener('pointercancel', endDrag);
+    };
+  }, [cropModal.open]);
+
+  useEffect(() => {
+    if (!cropModal.open) return;
+    const frame = cropEditorFrameRef.current;
+    if (!frame) return;
+
+    const updateFrameSize = () => {
+      setCropFrameSize({
+        width: frame.clientWidth || 0,
+        height: frame.clientHeight || 0,
+      });
+    };
+
+    updateFrameSize();
+    const observer = new ResizeObserver(updateFrameSize);
+    observer.observe(frame);
+    window.addEventListener('resize', updateFrameSize);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateFrameSize);
+    };
+  }, [cropModal.open, cropModal.target]);
+
+  const createCroppedFile = async (file, adjust, output, outputName) => {
+    const objectUrl = URL.createObjectURL(file);
+    try {
+      const image = await loadImage(objectUrl);
+      const canvas = document.createElement('canvas');
+      canvas.width = output.width;
+      canvas.height = output.height;
+      const context = canvas.getContext('2d');
+      context.fillStyle = '#f5f7fb';
+      context.fillRect(0, 0, output.width, output.height);
+      const metrics = getViewportCropMetrics(
+        adjust,
+        { width: output.width, height: output.height },
+        { width: image.width, height: image.height },
+      );
+      context.drawImage(
+        image,
+        (output.width - metrics.drawWidth) / 2 + metrics.offsetX,
+        (output.height - metrics.drawHeight) / 2 + metrics.offsetY,
+        metrics.drawWidth,
+        metrics.drawHeight,
+      );
+
+      const blob = await new Promise((resolve) =>
+        canvas.toBlob(resolve, 'image/jpeg', 0.92),
+      );
+      if (!blob) return file;
+
+      return new File([blob], outputName, { type: 'image/jpeg' });
+    } catch {
+      return file;
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
+  };
+
+  const openCropModal = (target, file) => {
+    const sourceUrl = URL.createObjectURL(file);
+    loadImage(sourceUrl)
+      .then((image) => {
+        setCropModal((prev) => {
+          if (prev.sourceUrl && prev.sourceUrl.startsWith('blob:')) {
+            URL.revokeObjectURL(prev.sourceUrl);
+          }
+          return {
+            open: true,
+            target,
+            file,
+            sourceUrl,
+            imageSize: { width: image.width, height: image.height },
+            adjust: { zoom: 1, x: 0, y: 0 },
+          };
+        });
+      })
+      .catch(() => {
+        setCropModal((prev) => {
+          if (prev.sourceUrl && prev.sourceUrl.startsWith('blob:')) {
+            URL.revokeObjectURL(prev.sourceUrl);
+          }
+          return {
+            open: true,
+            target,
+            file,
+            sourceUrl,
+            imageSize: { width: 1, height: 1 },
+            adjust: { zoom: 1, x: 0, y: 0 },
+          };
+        });
+      });
+  };
+
+  const closeCropModal = () => {
+    if (cropModal.sourceUrl && cropModal.sourceUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(cropModal.sourceUrl);
+    }
+    cropDragRef.current = { active: false, startX: 0, startY: 0, baseX: 0, baseY: 0 };
+    setIsCropDragging(false);
+    setCropModal({
+      open: false,
+      target: null,
+      file: null,
+      sourceUrl: '',
+      imageSize: { width: 1, height: 1 },
+      adjust: { zoom: 1, x: 0, y: 0 },
+    });
+  };
+
+  const applyCropModal = async () => {
+    if (!cropModal.file || !cropModal.target) return;
+    setApplyingCrop(true);
+    try {
+      if (cropModal.target === 'avatar') {
+        const cropped = await createCroppedFile(
+          cropModal.file,
+          cropModal.adjust,
+          { width: 512, height: 512 },
+          `avatar-${Date.now()}.jpg`,
+        );
+        if (avatarPreview && avatarPreview.startsWith('blob:')) {
+          URL.revokeObjectURL(avatarPreview);
+        }
+        setAvatarFile(cropped);
+        setAvatarPreview(URL.createObjectURL(cropped));
+      } else {
+        const cropped = await createCroppedFile(
+          cropModal.file,
+          cropModal.adjust,
+          { width: 1600, height: 500 },
+          `background-${Date.now()}.jpg`,
+        );
+        if (profileBackgroundPreview && profileBackgroundPreview.startsWith('blob:')) {
+          URL.revokeObjectURL(profileBackgroundPreview);
+        }
+        setProfileBackgroundFile(cropped);
+        setProfileBackgroundPreview(URL.createObjectURL(cropped));
+      }
+      closeCropModal();
+    } finally {
+      setApplyingCrop(false);
+    }
+  };
+
   useEffect(() => {
     return () => {
       if (avatarPreview && avatarPreview.startsWith('blob:')) {
@@ -529,6 +864,14 @@ const Profile = () => {
       }
     };
   }, [avatarPreview, profileBackgroundPreview]);
+
+  useEffect(() => {
+    return () => {
+      if (cropModal.sourceUrl && cropModal.sourceUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(cropModal.sourceUrl);
+      }
+    };
+  }, [cropModal.sourceUrl]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -655,23 +998,13 @@ const Profile = () => {
   const handleAvatarChange = (event) => {
     const file = event.target.files[0];
     if (!file) return;
-    if (avatarPreview && avatarPreview.startsWith('blob:')) {
-      URL.revokeObjectURL(avatarPreview);
-    }
-    setAvatarFile(file);
-    const previewUrl = URL.createObjectURL(file);
-    setAvatarPreview(previewUrl);
+    openCropModal('avatar', file);
   };
 
   const handleBackgroundChange = (event) => {
     const file = event.target.files[0];
     if (!file) return;
-    if (profileBackgroundPreview && profileBackgroundPreview.startsWith('blob:')) {
-      URL.revokeObjectURL(profileBackgroundPreview);
-    }
-    setProfileBackgroundFile(file);
-    const previewUrl = URL.createObjectURL(file);
-    setProfileBackgroundPreview(previewUrl);
+    openCropModal('background', file);
   };
 
   const handleSaveProfile = async () => {
@@ -823,16 +1156,7 @@ const Profile = () => {
     event.preventDefault();
   };
 
-  const handleDrop = async (index) => {
-    const fromIndex = dragIndexRef.current;
-    if (fromIndex === null || fromIndex === index) return;
-
-    const nextPosts = [...posts];
-    const [moved] = nextPosts.splice(fromIndex, 1);
-    nextPosts.splice(index, 0, moved);
-    setPosts(nextPosts);
-    dragIndexRef.current = null;
-
+  const persistPostOrder = async (nextPosts) => {
     const token = getAuthTokenOrLogout(navigate);
     if (!token) return;
 
@@ -856,6 +1180,30 @@ const Profile = () => {
     } catch (err) {
       setPostError(err.message);
     }
+  };
+
+  const handleDrop = async (index) => {
+    const fromIndex = dragIndexRef.current;
+    dragIndexRef.current = null;
+    if (fromIndex === null || fromIndex === index) return;
+
+    const nextPosts = [...posts];
+    const [moved] = nextPosts.splice(fromIndex, 1);
+    nextPosts.splice(index, 0, moved);
+    setPosts(nextPosts);
+    await persistPostOrder(nextPosts);
+  };
+
+  const handleMovePost = async (index, direction) => {
+    const swapIndex = direction === 'up' ? index - 1 : index + 1;
+    if (swapIndex < 0 || swapIndex >= posts.length) return;
+
+    const nextPosts = [...posts];
+    const temp = nextPosts[index];
+    nextPosts[index] = nextPosts[swapIndex];
+    nextPosts[swapIndex] = temp;
+    setPosts(nextPosts);
+    await persistPostOrder(nextPosts);
   };
 
   const handleSavePost = async () => {
@@ -893,6 +1241,11 @@ const Profile = () => {
   const activeFont = fontOptions[fontFamily]?.stack || fontOptions.inter.stack;
   const accentHex = accentColor && accentColor.match(/^#([0-9a-fA-F]{6})$/) ? accentColor : activeTheme.accent;
   const modeTheme = { ...activeTheme, accent: accentHex, accentDark: accentHex };
+  const cropPreviewMetrics = getViewportCropMetrics(
+    cropModal.adjust,
+    cropFrameSize,
+    cropModal.imageSize,
+  );
 
   return (
     <ProfileShell
@@ -928,6 +1281,10 @@ const Profile = () => {
               onEdit={handleEditPost}
               onDelete={handleDeletePost}
               onToggleVisibility={handleTogglePostVisibility}
+              onMoveUp={() => handleMovePost(index, 'up')}
+              onMoveDown={() => handleMovePost(index, 'down')}
+              canMoveUp={index > 0}
+              canMoveDown={index < posts.length - 1}
             />
           </DragItem>
         ))}
@@ -1015,7 +1372,7 @@ const Profile = () => {
                   onChange={handleAvatarChange}
                 />
                 <FilePicker htmlFor="avatar-upload">
-                  <span>Choose a new photo</span>
+                  <span>Choose and crop photo</span>
                   <FileName>{avatarFile ? avatarFile.name : 'No file selected'}</FileName>
                 </FilePicker>
               </div>
@@ -1032,7 +1389,7 @@ const Profile = () => {
               onChange={handleBackgroundChange}
             />
             <FilePicker htmlFor="profile-background-upload">
-              <span>Choose background image</span>
+              <span>Choose and crop background</span>
               <FileName>{profileBackgroundFile ? profileBackgroundFile.name : 'No file selected'}</FileName>
             </FilePicker>
             <ActionRow>
@@ -1040,6 +1397,57 @@ const Profile = () => {
               <ActionButton onClick={handleSaveProfile}>Save Profile</ActionButton>
             </ActionRow>
           </ModalContent>
+        </ModalOverlay>
+      )}
+
+      {cropModal.open && (
+        <ModalOverlay onClick={closeCropModal}>
+          <CropEditorCard onClick={(event) => event.stopPropagation()}>
+            <ModalTitle>
+              {cropModal.target === 'avatar' ? 'Crop Profile Photo' : 'Crop Background Image'}
+            </ModalTitle>
+            <CropEditorFrame
+              ref={cropEditorFrameRef}
+              $avatar={cropModal.target === 'avatar'}
+              $dragging={isCropDragging}
+              onPointerDown={startCropDrag}>
+              <CropImage
+                src={cropModal.sourceUrl}
+                alt="Crop preview"
+                style={{
+                  width: `${cropPreviewMetrics.drawWidth}px`,
+                  height: `${cropPreviewMetrics.drawHeight}px`,
+                  transform: `translate(calc(-50% + ${cropPreviewMetrics.offsetX}px), calc(-50% + ${cropPreviewMetrics.offsetY}px))`,
+                }}
+              />
+            </CropEditorFrame>
+            <CropControls>
+              <CropRow>
+                <span>Zoom</span>
+                <CropRange
+                  type="range"
+                  min="1"
+                  max="3"
+                  step="0.01"
+                  value={cropModal.adjust.zoom}
+                  onChange={(e) =>
+                    setCropModal((prev) => ({
+                      ...prev,
+                      adjust: { ...prev.adjust, zoom: Number(e.target.value) },
+                    }))
+                  }
+                />
+                <strong>{cropModal.adjust.zoom.toFixed(2)}x</strong>
+              </CropRow>
+              <CropHint>Drag image to position the area you want.</CropHint>
+            </CropControls>
+            <ActionRow>
+              <SecondaryButton onClick={closeCropModal}>Cancel</SecondaryButton>
+              <ActionButton onClick={applyCropModal} disabled={applyingCrop}>
+                {applyingCrop ? 'Applying...' : 'Apply Crop'}
+              </ActionButton>
+            </ActionRow>
+          </CropEditorCard>
         </ModalOverlay>
       )}
 

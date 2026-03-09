@@ -52,6 +52,9 @@ CREATE TABLE IF NOT EXISTS profile_gallery (
     id SERIAL PRIMARY KEY,
     student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
     photo_url TEXT NOT NULL,
+    display_order INTEGER,
+    title TEXT,
+    description TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

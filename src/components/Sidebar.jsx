@@ -87,6 +87,24 @@ const BellWrapper = styled.div`
   position: relative;
 `;
 
+const BellBadge = styled.span`
+  position: absolute;
+  top: -5px;
+  right: -6px;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.28rem;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+`;
+
 const LogoutButton = styled.button`
   background: none;
   border: none;
@@ -106,6 +124,8 @@ const LogoutButton = styled.button`
 const Sidebar = ({ onCreatePost }) => {
   const navigate = useNavigate();
   const [isNotifyOpen, setIsNotifyOpen] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [markingAllRead, setMarkingAllRead] = useState(false);
   const bellRef = useRef(null);
   
   const myProfilePath = useMemo(() => {
@@ -133,14 +153,77 @@ const Sidebar = ({ onCreatePost }) => {
     };
   }, [isNotifyOpen]);
 
-  const notifications = [
-    { id: 1, text: 'New comment on your post', postId: 7, studentId: 1 },
-    { id: 2, text: 'Samira liked your post', postId: 6, studentId: 2 },
-  ];
+  const fetchNotifications = async () => {
+    const token = getAuthTokenOrLogout(navigate);
+    if (!token) {
+      setNotifications([]);
+      return;
+    }
 
-  const handleNotificationClick = (note) => {
+    try {
+      const response = await fetch('/api/notifications', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!response.ok) {
+        return;
+      }
+      const data = await response.json();
+      setNotifications(Array.isArray(data) ? data : []);
+    } catch {
+      // keep previous notification state on transient failure
+    }
+  };
+
+  useEffect(() => {
+    fetchNotifications();
+    const intervalId = window.setInterval(fetchNotifications, 30000);
+    return () => window.clearInterval(intervalId);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!isNotifyOpen) return;
+    fetchNotifications();
+  }, [isNotifyOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleNotificationClick = async (note) => {
     setIsNotifyOpen(false);
-    navigate(`/profile/${note.studentId}#post-${note.postId}`);
+    const token = getAuthTokenOrLogout(navigate);
+    if (token && note?.id) {
+      try {
+        await fetch(`/api/notifications/${note.id}/read`, {
+          method: 'PUT',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+      } catch {
+        // no-op; still navigate
+      }
+    }
+    setNotifications((prev) =>
+      prev.map((item) => (item.id === note.id ? { ...item, is_read: 1 } : item))
+    );
+    const target = note?.link_url || '/notifications';
+    navigate(target);
+  };
+
+  const handleMarkAllRead = async () => {
+    const token = getAuthTokenOrLogout(navigate);
+    if (!token) return;
+    try {
+      setMarkingAllRead(true);
+      await fetch('/api/notifications/read-all', {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      setNotifications((prev) => prev.map((note) => ({ ...note, is_read: 1 })));
+    } finally {
+      setMarkingAllRead(false);
+    }
   };
 
   const handleLogout = () => {
@@ -148,6 +231,11 @@ const Sidebar = ({ onCreatePost }) => {
     console.log('Logging out...');
     window.location.href = '/login';
   };
+
+  const unreadCount = notifications.reduce(
+    (count, note) => count + (Number(note.is_read) === 1 ? 0 : 1),
+    0
+  );
 
   return (
     <SidebarContainer>
@@ -171,11 +259,14 @@ const Sidebar = ({ onCreatePost }) => {
           onClick={() => setIsNotifyOpen((prev) => !prev)}
         >
           <FiBell />
+          {unreadCount > 0 && <BellBadge>{unreadCount > 9 ? '9+' : unreadCount}</BellBadge>}
         </ActionItem>
         {isNotifyOpen && (
           <NotificationDropdown
             notifications={notifications}
             onSelect={handleNotificationClick}
+            onMarkAllRead={handleMarkAllRead}
+            loading={markingAllRead}
           />
         )}
       </BellWrapper>

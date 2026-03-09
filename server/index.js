@@ -72,6 +72,14 @@ const ensureApprovalStatusColumn = async () => {
     }
 };
 
+const createNotification = async (userId, message, linkUrl = null) => {
+    if (!userId || !message) return;
+    await dbRun(
+        "INSERT INTO notifications (user_id, message, is_read, link_url, created_at) VALUES ($1, $2, 0, $3, CURRENT_TIMESTAMP)",
+        [userId, message, linkUrl],
+    );
+};
+
 const initializeDatabase = async () => {
     const originalLog = console.log;
     console.log = () => {}; // silence logs
@@ -98,45 +106,38 @@ const initializeDatabase = async () => {
                 .map((statement) => statement.trim())
                 .filter(Boolean);
 
-            for (const statement of statements) {
-                await sql.unsafe(statement);
-            }
-            console.log("Database schema initialized successfully.");
-        } else {
-            console.log(
-                "Database schema already exists. Running compatibility migrations.",
-            );
-        }
+    for (const statement of statements) {
+        await sql.unsafe(statement);
+    }
 
-        // Compatibility migrations for existing databases.
-        await sql.unsafe(
-            "ALTER TABLE students ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user'",
-        );
-        await ensureApprovalStatusColumn();
-        await sql.unsafe(
-            "ALTER TABLE students ADD COLUMN IF NOT EXISTS appearance_theme TEXT",
-        );
-        await sql.unsafe(
-            "ALTER TABLE students ADD COLUMN IF NOT EXISTS font_family TEXT",
-        );
-        await sql.unsafe(
-            "ALTER TABLE students ADD COLUMN IF NOT EXISTS accent_color TEXT",
-        );
-        await sql.unsafe(
-            "ALTER TABLE students ADD COLUMN IF NOT EXISTS font_size TEXT",
-        );
-        await sql.unsafe(
-            "ALTER TABLE students ADD COLUMN IF NOT EXISTS profile_background_url TEXT",
-        );
-        await sql.unsafe(
-            "ALTER TABLE posts ADD COLUMN IF NOT EXISTS is_hidden INTEGER DEFAULT 0",
-        );
-        await sql.unsafe(
-            "ALTER TABLE posts ADD COLUMN IF NOT EXISTS display_order INTEGER",
-        );
-        await sql.unsafe(
-            "ALTER TABLE posts ADD COLUMN IF NOT EXISTS post_font_family TEXT",
-        );
+    // Ensure compatibility with databases created before newer profile/gallery fields.
+    await sql.unsafe(
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user'",
+    );
+    await sql.unsafe(
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS appearance_theme TEXT",
+    );
+    await sql.unsafe(
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS font_family TEXT",
+    );
+    await sql.unsafe(
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS accent_color TEXT",
+    );
+    await sql.unsafe(
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS font_size TEXT",
+    );
+    await sql.unsafe(
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS profile_background_url TEXT",
+    );
+    await sql.unsafe(
+        "ALTER TABLE posts ADD COLUMN IF NOT EXISTS is_hidden INTEGER DEFAULT 0",
+    );
+    await sql.unsafe(
+        "ALTER TABLE posts ADD COLUMN IF NOT EXISTS display_order INTEGER",
+    );
+    await sql.unsafe(
+        "ALTER TABLE posts ADD COLUMN IF NOT EXISTS post_font_family TEXT",
+    );
 
         await sql.unsafe(
             `CREATE TABLE IF NOT EXISTS comment_likes (
@@ -150,24 +151,29 @@ const initializeDatabase = async () => {
             "ALTER TABLE comments ADD COLUMN IF NOT EXISTS likes INTEGER DEFAULT 0",
         );
 
-        await sql.unsafe(
-            "CREATE INDEX IF NOT EXISTS idx_comment_likes_comment_user ON comment_likes (comment_id, user_id)",
-        );
-        await sql.unsafe(
-            "CREATE INDEX IF NOT EXISTS idx_posts_visibility_created_at ON posts (is_hidden, created_at DESC)",
-        );
-        await sql.unsafe(
-            "CREATE INDEX IF NOT EXISTS idx_posts_student_order_created ON posts (student_id, display_order, created_at DESC)",
-        );
-        await sql.unsafe(
-            "CREATE INDEX IF NOT EXISTS idx_comments_post_created ON comments (post_id, created_at ASC)",
-        );
-        await sql.unsafe(
-            "CREATE INDEX IF NOT EXISTS idx_likes_post_user ON likes (post_id, user_id)",
-        );
-    } finally {
-        console.log = originalLog;
-    }
+    // index for performance
+    await sql.unsafe(
+        "CREATE INDEX IF NOT EXISTS idx_comment_likes_comment_user ON comment_likes (comment_id, user_id)"
+    );
+
+
+
+    // Indexes for common feed/profile/detail queries.
+    await sql.unsafe(
+        "CREATE INDEX IF NOT EXISTS idx_posts_visibility_created_at ON posts (is_hidden, created_at DESC)",
+    );
+    await sql.unsafe(
+        "CREATE INDEX IF NOT EXISTS idx_posts_student_order_created ON posts (student_id, display_order, created_at DESC)",
+    );
+    await sql.unsafe(
+        "CREATE INDEX IF NOT EXISTS idx_comments_post_created ON comments (post_id, created_at ASC)",
+    );
+    await sql.unsafe(
+        "CREATE INDEX IF NOT EXISTS idx_likes_post_user ON likes (post_id, user_id)",
+    );
+    await sql.unsafe(
+        "CREATE INDEX IF NOT EXISTS idx_gallery_student_created ON profile_gallery (student_id, created_at DESC)",
+    );
 };
 
 app.use(cors());
@@ -463,6 +469,14 @@ app.post("/api/posts/:id/like", authenticateToken, async (req, res) => {
     const userId = req.user.id;
 
     try {
+        const postOwner = await dbGet(
+            "SELECT p.student_id, p.title, s.name AS owner_name FROM posts p JOIN students s ON p.student_id = s.id WHERE p.id = $1",
+            [postId],
+        );
+        if (!postOwner) {
+            return res.status(404).json({ message: "Post not found." });
+        }
+
         const existingLike = await dbGet(
             "SELECT * FROM likes WHERE user_id = $1 AND post_id = $2",
             [userId, postId],
@@ -484,6 +498,17 @@ app.post("/api/posts/:id/like", authenticateToken, async (req, res) => {
             await dbRun("UPDATE posts SET likes = likes + 1 WHERE id = $1", [
                 postId,
             ]);
+            if (Number(postOwner.student_id) !== Number(userId)) {
+                const actor = await dbGet(
+                    "SELECT name FROM students WHERE id = $1",
+                    [userId],
+                );
+                await createNotification(
+                    postOwner.student_id,
+                    `${actor?.name || "Someone"} liked your post "${postOwner.title || "Untitled"}"`,
+                    `/post/${postId}`,
+                );
+            }
         }
 
         const updatedPost = await dbGet(
@@ -725,6 +750,14 @@ app.post("/api/posts/:id/comments", authenticateToken, async (req, res) => {
     }
 
     try {
+        const postOwner = await dbGet(
+            "SELECT p.student_id, p.title FROM posts p WHERE p.id = $1",
+            [postId],
+        );
+        if (!postOwner) {
+            return res.status(404).json({ message: "Post not found." });
+        }
+
         const result = await dbRun(
             "INSERT INTO comments (post_id, user_id, content) VALUES ($1, $2, $3) RETURNING id",
             [postId, userId, content.trim()],
@@ -741,6 +774,14 @@ app.post("/api/posts/:id/comments", authenticateToken, async (req, res) => {
             WHERE c.id = $1`,
             [newCommentId],
         );
+
+        if (Number(postOwner.student_id) !== Number(userId)) {
+            await createNotification(
+                postOwner.student_id,
+                `${newComment?.user_name || "Someone"} commented on your post "${postOwner.title || "Untitled"}"`,
+                `/post/${postId}#comments`,
+            );
+        }
 
         return res.status(201).json({ comment: newComment });
     } catch (error) {
@@ -997,11 +1038,60 @@ app.get("/api/students/:id", async (req, res, next) => {
     }
 });
 
+app.get("/api/notifications", authenticateToken, async (req, res) => {
+    const userId = req.user.id;
+    try {
+        const rows = await dbAll(
+            `SELECT id, user_id, message, is_read, link_url, created_at
+             FROM notifications
+             WHERE user_id = $1
+             ORDER BY created_at DESC
+             LIMIT 40`,
+            [userId],
+        );
+        return res.json(rows);
+    } catch (error) {
+        return res.status(500).json({ error: error.message });
+    }
+});
+
+app.put("/api/notifications/:id/read", authenticateToken, async (req, res) => {
+    const userId = req.user.id;
+    const notificationId = Number(req.params.id);
+    if (!Number.isInteger(notificationId) || notificationId <= 0) {
+        return res.status(400).json({ error: "Invalid notification id." });
+    }
+    try {
+        await dbRun(
+            "UPDATE notifications SET is_read = 1 WHERE id = $1 AND user_id = $2",
+            [notificationId, userId],
+        );
+        return res.json({ success: true });
+    } catch (error) {
+        return res.status(500).json({ error: error.message });
+    }
+});
+
+app.put("/api/notifications/read-all", authenticateToken, async (req, res) => {
+    const userId = req.user.id;
+    try {
+        await dbRun("UPDATE notifications SET is_read = 1 WHERE user_id = $1", [
+            userId,
+        ]);
+        return res.json({ success: true });
+    } catch (error) {
+        return res.status(500).json({ error: error.message });
+    }
+});
+
 app.get("/api/students/:id/gallery", async (req, res) => {
     const { id } = req.params;
     try {
         const rows = await dbAll(
-            "SELECT id, student_id, photo_url, created_at FROM profile_gallery WHERE student_id = $1 ORDER BY created_at DESC, id DESC",
+            `SELECT id, student_id, photo_url, title, description, display_order, created_at
+             FROM profile_gallery
+             WHERE student_id = $1
+             ORDER BY (display_order IS NULL) ASC, display_order ASC, created_at DESC, id DESC`,
             [id],
         );
         return res.json(rows);
@@ -1016,18 +1106,30 @@ app.post(
     galleryUpload.single("photo"),
     async (req, res) => {
         const userId = req.user.id;
+        const title = (req.body?.title || "").trim();
+        const description = (req.body?.description || "").trim();
         if (!req.file) {
             return res.status(400).json({ error: "Photo file is required." });
         }
 
         try {
             const photoUrl = `/uploads/${req.file.filename}`;
+            const lastOrder = await dbGet(
+                "SELECT COALESCE(MAX(display_order), -1) AS max_order FROM profile_gallery WHERE student_id = $1",
+                [userId],
+            );
             const result = await dbRun(
-                "INSERT INTO profile_gallery (student_id, photo_url) VALUES ($1, $2) RETURNING id",
-                [userId, photoUrl],
+                "INSERT INTO profile_gallery (student_id, photo_url, display_order, title, description) VALUES ($1, $2, $3, $4, $5) RETURNING id",
+                [
+                    userId,
+                    photoUrl,
+                    Number(lastOrder?.max_order ?? -1) + 1,
+                    title || null,
+                    description || null,
+                ],
             );
             const photo = await dbGet(
-                "SELECT id, student_id, photo_url, created_at FROM profile_gallery WHERE id = $1",
+                "SELECT id, student_id, photo_url, title, description, display_order, created_at FROM profile_gallery WHERE id = $1",
                 [result.lastID],
             );
             return res.status(201).json(photo);
@@ -1036,6 +1138,73 @@ app.post(
         }
     },
 );
+
+app.put("/api/profile/gallery/reorder", authenticateToken, async (req, res) => {
+    const userId = req.user.id;
+    const { photoIds } = req.body || {};
+    if (!Array.isArray(photoIds) || photoIds.length === 0) {
+        return res.status(400).json({ error: "photoIds array is required." });
+    }
+
+    try {
+        const owned = await dbAll(
+            "SELECT id FROM profile_gallery WHERE student_id = $1",
+            [userId],
+        );
+        const ownedSet = new Set(owned.map((row) => Number(row.id)));
+        const incomingSet = new Set(photoIds.map((id) => Number(id)));
+        if (incomingSet.size !== ownedSet.size) {
+            return res.status(400).json({ error: "photoIds must include all gallery photos." });
+        }
+        for (const id of incomingSet) {
+            if (!ownedSet.has(id)) {
+                return res.status(403).json({ error: "Invalid gallery photo list." });
+            }
+        }
+
+        for (let index = 0; index < photoIds.length; index += 1) {
+            await dbRun(
+                "UPDATE profile_gallery SET display_order = $1 WHERE id = $2 AND student_id = $3",
+                [index, Number(photoIds[index]), userId],
+            );
+        }
+        return res.json({ message: "Gallery reordered successfully." });
+    } catch (error) {
+        return res.status(500).json({ error: error.message });
+    }
+});
+
+app.put("/api/profile/gallery/:id", authenticateToken, async (req, res) => {
+    const userId = req.user.id;
+    const photoId = Number(req.params.id);
+    const title = (req.body?.title || "").trim();
+    const description = (req.body?.description || "").trim();
+    if (!Number.isInteger(photoId) || photoId <= 0) {
+        return res.status(400).json({ error: "Invalid gallery photo id." });
+    }
+
+    try {
+        const existing = await dbGet(
+            "SELECT id FROM profile_gallery WHERE id = $1 AND student_id = $2",
+            [photoId, userId],
+        );
+        if (!existing) {
+            return res.status(404).json({ error: "Gallery photo not found." });
+        }
+
+        await dbRun(
+            "UPDATE profile_gallery SET title = $1, description = $2 WHERE id = $3 AND student_id = $4",
+            [title || null, description || null, photoId, userId],
+        );
+        const updated = await dbGet(
+            "SELECT id, student_id, photo_url, title, description, display_order, created_at FROM profile_gallery WHERE id = $1",
+            [photoId],
+        );
+        return res.json(updated);
+    } catch (error) {
+        return res.status(500).json({ error: error.message });
+    }
+});
 
 app.get("/api/students/:id/posts", async (req, res) => {
     const { id } = req.params;
