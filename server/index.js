@@ -1286,7 +1286,7 @@ app.get("/api/validate-code/:code", async (req, res) => {
     try {
         const { code } = req.params;
         const validCode = await dbGet(sql`
-            SELECT 1 FROM registration_codes 
+            SELECT * FROM registration_codes 
             WHERE code = ${code.toUpperCase()} AND is_active = true
         `);
 
