@@ -38,8 +38,13 @@ const dbGet = async (query, params = []) => {
 };
 
 const dbAll = async (query, params = []) => {
-    const result = await executeQuery(query, params);
-    return Array.isArray(result) ? result : [];
+    try {
+        const result = await executeQuery(query, params);
+        return Array.isArray(result) ? result : [];
+    } catch (error) {
+        console.error("Error in dbAll:", error);
+        throw error;
+    }
 };
 
 const dbRun = async (query, params = []) => {
@@ -162,6 +167,7 @@ const galleryUpload = multer({
 });
 
 const authenticateToken = (req, res, next) => {
+    console.log("Inside authenticateToken middleware");
     const authHeader = req.headers["authorization"];
     const token = authHeader && authHeader.split(" ")[1];
 
@@ -175,6 +181,7 @@ const authenticateToken = (req, res, next) => {
         if (err) {
             return res.status(403).json({ error: "Invalid or expired token." });
         }
+        console.log("Token verified for user:", user);
         req.user = user;
         next();
     });
@@ -210,10 +217,10 @@ app.post("/api/signup", async (req, res) => {
         const about_me = "New community member";
 
         await dbRun(sql`
-            INSERT INTO students (name, email, password, avatar_url, about_me)
-            VALUES (${name}, ${email}, ${hashedPassword}, ${avatar_url}, ${about_me})
-            RETURNING id
-        `);
+INSERT INTO students (name, email, password, avatar_url, about_me, approval_status)
+VALUES (${name}, ${email}, ${hashedPassword}, ${avatar_url}, ${about_me}, 'pending')
+RETURNING id
+`);
 
         return res.status(201).json({ message: "User created successfully." });
     } catch (error) {
@@ -244,6 +251,12 @@ app.post("/api/login", async (req, res) => {
         const user = await dbGet(sql`
             SELECT * FROM students WHERE email = ${email}
         `);
+
+        if (user.approval_status !== "approved") {
+            return res.status(403).json({
+                error: "Your account is awaiting admin approval.",
+            });
+        }
 
         if (!user) {
             return res.status(401).json({ error: "User not found." });
@@ -1198,6 +1211,86 @@ app.get("/api/validate-code/:code", async (req, res) => {
         return res.status(500).json({ error: "Validation error" });
     }
 });
+
+// student approval routes
+app.get(
+    "/api/students/pending",
+    authenticateToken,
+    RequireAdmin,
+    (req, res) => {
+        console.log("Inside /api/students/pending route handler");
+        dbAll("SELECT id, name, email FROM students WHERE approval_status = 'pending'")
+            .then(students => {
+                res.json(students);
+            })
+            .catch(error => {
+                console.log("Caught error in /api/students/pending:", error);
+                console.error("Error fetching pending students:", error);
+                res.status(500).json({ error: error.message });
+            });
+    },
+);
+
+app.post(
+    "/api/students/:id/approve",
+    authenticateToken,
+    RequireAdmin,
+    async (req, res) => {
+        const { id } = req.params;
+
+        try {
+            await dbRun(
+                "UPDATE students SET approval_status = $1 WHERE id = $2",
+                ["approved", id],
+            );
+
+            res.json({ message: "Student approved." });
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ error: "Failed to approve student." });
+        }
+    },
+);
+
+app.post(
+    "/api/students/:id/deny",
+    authenticateToken,
+    RequireAdmin,
+    async (req, res) => {
+        const { id } = req.params;
+
+        try {
+            await dbRun(
+                "UPDATE students SET approval_status = $1 WHERE id = $2",
+                ["denied", id],
+            );
+
+            res.json({ message: "Student denied." });
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ error: "Failed to deny student." });
+        }
+    },
+);
+
+app.post(
+    "/api/students/approve-all",
+    authenticateToken,
+    RequireAdmin,
+    async (req, res) => {
+        try {
+            await dbRun(
+                "UPDATE students SET approval_status = $1 WHERE approval_status = $2",
+                ["approved", "pending"],
+            );
+
+            res.json({ message: "All pending students approved." });
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ error: "Failed to approve students." });
+        }
+    },
+);
 
 //api/me
 app.get("/api/me", authenticateToken, RequireAdmin, async (req, res) => {

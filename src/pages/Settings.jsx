@@ -10,6 +10,7 @@ import { exportUserData } from "../utils/FetchData.js";
 import { getAuthTokenOrLogout } from "../utils/auth";
 import ReigistrationCodeManager from "../components/RegistrationCodeManager.jsx";
 import { FiList } from "react-icons/fi";
+import StudentAcceptanceModal from "../components/StudentAcceptanceModal.jsx";
 
 const SettingsPage = styled.div`
     margin: -2.5rem;
@@ -184,6 +185,23 @@ const Settings = () => {
     const [dialog, setDialog] = React.useState(null);
     const [user, setUser] = React.useState(null);
     const [showManageModal, setShowManageModal] = React.useState(false);
+    const [showStudentModal, setShowStudentModal] = React.useState(false);
+    const [pendingCount, setPendingCount] = React.useState(0);
+
+    useEffect(() => {
+        const loadCount = async () => {
+            const token = getAuthTokenOrLogout();
+
+            const res = await fetch("/api/students/pending", {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+
+            const data = await res.json();
+            setPendingCount(data.length || 0);
+        };
+
+        loadCount();
+    }, []);
 
     useEffect(() => {
         const token = getAuthTokenOrLogout();
@@ -413,7 +431,7 @@ const Settings = () => {
                             <IconBadge>
                                 <FiDatabase size={17} />
                             </IconBadge>
-                            <CardTitle>Registration Codes</CardTitle>
+                            <CardTitle>Registration Management</CardTitle>
                         </CardHeader>
                         <CardDescription>
                             Generate a random 5-character code or view history
@@ -435,6 +453,17 @@ const Settings = () => {
                                 <FiList size={16} />
                                 Manage Codes
                             </SecondaryButton>
+                            <SecondaryButton
+                                onClick={() => setShowStudentModal(true)}
+                                style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "0.5rem",
+                                }}>
+                                <FiList size={16} />
+                                Manage Students{" "}
+                                {pendingCount > 0 && `(${pendingCount})`}
+                            </SecondaryButton>
                         </div>
                     </SettingCard>
                 )}
@@ -443,6 +472,11 @@ const Settings = () => {
                 {showManageModal && (
                     <ReigistrationCodeManager
                         onClose={() => setShowManageModal(false)}
+                    />
+                )}
+                {showStudentModal && (
+                    <StudentAcceptanceModal
+                        onClose={() => setShowStudentModal(false)}
                     />
                 )}
                 {/* {isAdmin && (

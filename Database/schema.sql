@@ -12,7 +12,8 @@ CREATE TABLE IF NOT EXISTS students (
     accent_color TEXT,
     font_size TEXT,
     profile_background_url TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    approval_status TEXT DEFAULT 'pending'
 );
 
 -- Create the posts table
