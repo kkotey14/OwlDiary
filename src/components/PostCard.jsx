@@ -4,6 +4,7 @@ import { FiHeart, FiMessageSquare } from 'react-icons/fi';
 import { resolveMediaUrl } from '../utils/media';
 import { useNavigate, Link } from 'react-router-dom';
 import { getAuthTokenOrLogout, handleAuthFailure } from '../utils/auth';
+import DOMPurify from 'dompurify';
 
 const Card = styled(Link)`
   background: white;
@@ -76,6 +77,12 @@ const PostMedia = styled.div`
 const PostPreview = styled.p`
   color: #556;
   line-height: 1.6;
+  padding: 0 0.5rem;
+  ol, ul {
+    padding-left: 1.5rem;
+  }
+  p {
+    margin: 0 0 0.5rem 0;
 `;
 
 const EngagementBar = styled.div`
@@ -142,6 +149,18 @@ const StyledFiHeart = styled(FiHeart)`
   transition: color 0.3s;
 `;
 
+const ReadMore = styled.span`
+  font-weight: 600;
+  font-size: 0.85rem;
+  margin-left: 0.25rem;
+  white-space: nowrap;
+  display: inline-block;
+  transition: transform 0.2s ease, font-size 0.2s ease;
+
+  &:hover {
+    font-size: 0.95rem;
+`;
+
 const PostCard = ({
   post,
   onLikeSuccess,
@@ -156,6 +175,7 @@ const PostCard = ({
   onMoveDown,
   canMoveUp,
   canMoveDown,
+  showMoveButtons = true,
 }) => {
   const [currentLikes, setCurrentLikes] = useState(post.likes);
   const [isLiked, setIsLiked] = useState(post.isLiked === 1);
@@ -226,24 +246,28 @@ const PostCard = ({
             )}
             {canEdit && (
               <>
-                <OwnerButton
-                  disabled={!canMoveUp}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    onMoveUp && onMoveUp(post);
-                  }}>
-                  Up
-                </OwnerButton>
-                <OwnerButton
-                  disabled={!canMoveDown}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    onMoveDown && onMoveDown(post);
-                  }}>
-                  Down
-                </OwnerButton>
+                {showMoveButtons && (
+                  <>
+                    <OwnerButton
+                      disabled={!canMoveUp}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onMoveUp && onMoveUp(post);
+                      }}>
+                      Up
+                    </OwnerButton>
+                    <OwnerButton
+                      disabled={!canMoveDown}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onMoveDown && onMoveDown(post);
+                      }}>
+                      Down
+                    </OwnerButton>
+                  </>
+                )}
                 <OwnerButton onClick={(e) => { e.preventDefault(); e.stopPropagation(); onEdit && onEdit(post); }}>Edit</OwnerButton>
                 <OwnerButton onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete && onDelete(post); }}>Delete</OwnerButton>
               </>
@@ -261,7 +285,13 @@ const PostCard = ({
         </PostMedia>
       )}
 
-      <PostPreview style={{ fontFamily: postFont }}>{post.content.substring(0, 150)}...</PostPreview>
+      <div>
+        <PostPreview
+          style={{ fontFamily: postFont }}
+          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(post.content, { ALLOWED_TAGS: ['p', 'strong', 'em', 'u', 'ul', 'ol', 'li', 'br', 'span'] }).substring(0, 300) }}
+        />
+        <ReadMore>[CLICK TO READ MORE]</ReadMore>
+      </div>
       <EngagementBar>
         <EngagementIcon onClick={handleLike}>
           <StyledFiHeart $isLiked={isLiked} />

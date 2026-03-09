@@ -6,6 +6,7 @@ import PostCard from '../components/PostCard';
 import { jwtDecode } from 'jwt-decode';
 import { getAuthTokenOrLogout, handleAuthFailure } from '../utils/auth';
 import { resolveMediaUrl } from '../utils/media';
+import EditPostModal from '../components/EditPostModal';
 
 const BlogFeed = styled.div`
   display: grid;
@@ -318,8 +319,6 @@ const Profile = () => {
     baseY: 0,
   });
   const [editingPost, setEditingPost] = useState(null);
-  const [editTitle, setEditTitle] = useState('');
-  const [editContent, setEditContent] = useState('');
   const [postError, setPostError] = useState('');
   const dragIndexRef = useRef(null);
   const loadedStudentIdRef = useRef(null);
@@ -1051,9 +1050,6 @@ const Profile = () => {
 
   const handleEditPost = (post) => {
     setEditingPost(post);
-    setEditTitle(post.title || '');
-    setEditContent(post.content || '');
-    setPostError('');
   };
 
   const handleDeletePost = async (post) => {
@@ -1174,36 +1170,6 @@ const Profile = () => {
     await persistPostOrder(nextPosts);
   };
 
-  const handleSavePost = async () => {
-    if (!editingPost) return;
-    const token = getAuthTokenOrLogout(navigate);
-    if (!token) return;
-
-    try {
-      const response = await fetch(`/api/posts/${editingPost.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ title: editTitle, content: editContent })
-      });
-
-      if (!response.ok) {
-        if (handleAuthFailure(response.status, navigate)) {
-          return;
-        }
-        const errorText = await response.text();
-        throw new Error(errorText || 'Failed to update post');
-      }
-
-      const updatedPost = await response.json();
-      setPosts((prev) => prev.map((post) => (post.id === updatedPost.id ? updatedPost : post)));
-      setEditingPost(null);
-    } catch (err) {
-      setPostError(err.message);
-    }
-  };
 
   const activeTheme = themeOptions[appearanceTheme] || themeOptions.classic;
   const activeFont = fontOptions[fontFamily]?.stack || fontOptions.inter.stack;
@@ -1413,27 +1379,14 @@ const Profile = () => {
       )}
 
       {editingPost && (
-        <ModalOverlay>
-          <ModalContent>
-            <ModalTitle>Edit Post</ModalTitle>
-            {postError && <ErrorText>{postError}</ErrorText>}
-            <Field
-              type="text"
-              placeholder="Post title"
-              value={editTitle}
-              onChange={(e) => setEditTitle(e.target.value)}
-            />
-            <TextArea
-              placeholder="Post content"
-              value={editContent}
-              onChange={(e) => setEditContent(e.target.value)}
-            />
-            <ActionRow>
-              <SecondaryButton onClick={() => setEditingPost(null)}>Cancel</SecondaryButton>
-              <ActionButton onClick={handleSavePost}>Save Post</ActionButton>
-            </ActionRow>
-          </ModalContent>
-        </ModalOverlay>
+        <EditPostModal
+          post={editingPost}
+          onClose={() => setEditingPost(null)}
+          onPostUpdated={(updatedPost) => {
+            setPosts((prev) => prev.map((p) => (p.id === updatedPost.id ? updatedPost : p)));
+            setEditingPost(null);
+          }}
+        />
       )}
     </ProfileShell>
   );

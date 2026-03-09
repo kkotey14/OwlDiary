@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { useNavigate } from 'react-router-dom';
 import { getAuthTokenOrLogout, handleAuthFailure } from '../utils/auth';
+import RichTextEditor from './RichTextEditor';
 
 const ModalOverlay = styled.div`
   position: fixed;
@@ -22,10 +23,12 @@ const ModalContent = styled.div`
   border-radius: 10px;
   box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
   width: 90%;
-  max-width: 500px;
+  max-width: 600px;
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  max-height: 90vh;
+  overflow-y: auto;
 `;
 
 const ModalTitle = styled.h2`
@@ -34,31 +37,13 @@ const ModalTitle = styled.h2`
   margin-bottom: 1rem;
 `;
 
-const PostTextArea = styled.textarea`
-  width: 100%;
-  height: 150px;
-  padding: 0.8rem;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  font-size: 1rem;
-  resize: vertical;
-`;
-
 const PostInput = styled.input`
   width: 100%;
   padding: 0.8rem;
   border: 1px solid #ddd;
   border-radius: 8px;
   font-size: 1rem;
-`;
-
-const Select = styled.select`
-  width: 100%;
-  padding: 0.8rem;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  font-size: 1rem;
-  background: white;
+  box-sizing: border-box;
 `;
 
 const FileInputLabel = styled.label`
@@ -132,11 +117,9 @@ const ErrorMessage = styled.p`
   text-align: center;
 `;
 
-
 const CreatePostModal = ({ onClose, onPostCreated }) => {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [postFont, setPostFont] = useState("'Inter', sans-serif");
   const [mediaFile, setMediaFile] = useState(null);
   const [mediaPreviewUrl, setMediaPreviewUrl] = useState(null);
   const [error, setError] = useState(null);
@@ -144,11 +127,8 @@ const CreatePostModal = ({ onClose, onPostCreated }) => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Cleanup for preview URL
     return () => {
-      if (mediaPreviewUrl) {
-        URL.revokeObjectURL(mediaPreviewUrl);
-      }
+      if (mediaPreviewUrl) URL.revokeObjectURL(mediaPreviewUrl);
     };
   }, [mediaPreviewUrl]);
 
@@ -156,15 +136,11 @@ const CreatePostModal = ({ onClose, onPostCreated }) => {
     const file = e.target.files[0];
     if (file) {
       setMediaFile(file);
-      if (mediaPreviewUrl) {
-        URL.revokeObjectURL(mediaPreviewUrl); // Clean up previous preview
-      }
+      if (mediaPreviewUrl) URL.revokeObjectURL(mediaPreviewUrl);
       setMediaPreviewUrl(URL.createObjectURL(file));
     } else {
       setMediaFile(null);
-      if (mediaPreviewUrl) {
-        URL.revokeObjectURL(mediaPreviewUrl);
-      }
+      if (mediaPreviewUrl) URL.revokeObjectURL(mediaPreviewUrl);
       setMediaPreviewUrl(null);
     }
   };
@@ -179,111 +155,63 @@ const CreatePostModal = ({ onClose, onPostCreated }) => {
       setLoading(false);
       return;
     }
-    
-    // Determine post_type based on media file
+
     let post_type = 'text';
     if (mediaFile) {
-      if (mediaFile.type.startsWith('image/')) {
-        post_type = 'image';
-      } else if (mediaFile.type.startsWith('video/')) {
-        post_type = 'video';
-      }
+      if (mediaFile.type.startsWith('image/')) post_type = 'image';
+      else if (mediaFile.type.startsWith('video/')) post_type = 'video';
     }
 
     const formData = new FormData();
     formData.append('title', title);
     formData.append('content', content);
     formData.append('post_type', post_type);
-    formData.append('font_family', postFont);
-    if (mediaFile) {
-      formData.append('media', mediaFile); // 'media' is the field name Multer expects
+    if (mediaFile) formData.append('media', mediaFile);
+
+    try {
+      console.log('CreatePostModal: Submitting post...');
+      const response = await fetch('/api/posts', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData,
+      });
+
+      console.log('CreatePostModal: Raw response from server:', response);
+      let data = {};
+      const contentType = response.headers.get('content-type');
+
+      if (!response.ok) {
+        if (handleAuthFailure(response.status, navigate)) return;
+        if (contentType && contentType.includes('application/json')) {
+          data = await response.json();
+          throw new Error(data.error || data.message || 'Failed to create post');
+        } else {
+          const errorText = await response.text();
+          throw new Error(`Server error: ${errorText || response.statusText}`);
+        }
+      }
+
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+        console.log('CreatePostModal: Parsed JSON data:', data);
+      } else {
+        const errorText = await response.text();
+        throw new Error(`Server responded with non-JSON or empty body: ${errorText || response.statusText}`);
+      }
+
+      console.log('CreatePostModal: Post created successfully. Data:', data);
+      onPostCreated();
+      setMediaFile(null);
+      if (mediaPreviewUrl) URL.revokeObjectURL(mediaPreviewUrl);
+      setMediaPreviewUrl(null);
+      onClose();
+    } catch (err) {
+      console.error('CreatePostModal: Caught error during submission:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
-
-              try {
-
-                console.log('CreatePostModal: Submitting post...');
-
-                const response = await fetch('/api/posts', {
-
-                  method: 'POST',
-
-                  headers: {
-
-                    'Authorization': `Bearer ${token}`
-
-                  },
-
-                  body: formData,
-
-                });
-
-          
-
-                console.log('CreatePostModal: Raw response from server:', response);
-
-                let data = {};
-
-                const contentType = response.headers.get('content-type');
-
-                console.log('CreatePostModal: Response Content-Type:', contentType);
-
-          
-
-                if (!response.ok) {
-                  if (handleAuthFailure(response.status, navigate)) {
-                    return;
-                  }
-                  // Parse error response
-                  if (contentType && contentType.includes('application/json')) {
-                    data = await response.json();
-                    console.error('CreatePostModal: Response not OK. Error details:', data.error || data.message);
-                    throw new Error(data.error || data.message || 'Failed to create post');
-                  } else {
-                    const errorText = await response.text();
-                    console.error('CreatePostModal: Server responded with non-JSON error:', errorText);
-                    throw new Error(`Server error: ${errorText || response.statusText}`);
-                  }
-                }
-
-                // Success - parse the response
-                if (contentType && contentType.includes('application/json')) {
-                  data = await response.json();
-                  console.log('CreatePostModal: Parsed JSON data:', data);
-                } else {
-                  const errorText = await response.text();
-                  console.error('CreatePostModal: Server responded with non-JSON or empty body:', errorText);
-                  throw new Error(`Server responded with non-JSON or empty body: ${errorText || response.statusText}`);
-                }
-
-          
-
-                console.log('CreatePostModal: Post created successfully. Data:', data);
-
-                onPostCreated();
-
-                setMediaFile(null);
-
-                if (mediaPreviewUrl) {
-
-                  URL.revokeObjectURL(mediaPreviewUrl);
-
-                }
-
-                setMediaPreviewUrl(null);
-
-                onClose();
-
-              } catch (err) {
-
-                console.error('CreatePostModal: Caught error during submission:', err);
-
-                setError(err.message);
-
-              } finally {
-
-                setLoading(false);
-
-              }  };
+  };
 
   return (
     <ModalOverlay>
@@ -296,45 +224,15 @@ const CreatePostModal = ({ onClose, onPostCreated }) => {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
         />
-        <PostTextArea
-          placeholder="What's on your mind?"
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          style={{ fontFamily: postFont }}
-        />
-        <Select value={postFont} onChange={(e) => setPostFont(e.target.value)}>
-          <option value="'Inter', sans-serif">Inter</option>
-          <option value="'Poppins', sans-serif">Poppins</option>
-          <option value="'Montserrat', sans-serif">Montserrat</option>
-          <option value="'Raleway', sans-serif">Raleway</option>
-          <option value="'Nunito', sans-serif">Nunito</option>
-          <option value="'Karla', sans-serif">Karla</option>
-          <option value="'Fira Sans', sans-serif">Fira Sans</option>
-          <option value="'Source Sans 3', sans-serif">Source Sans 3</option>
-          <option value="'Space Grotesk', sans-serif">Space Grotesk</option>
-          <option value="'DM Sans', sans-serif">DM Sans</option>
-          <option value="'Work Sans', sans-serif">Work Sans</option>
-          <option value="'Manrope', sans-serif">Manrope</option>
-          <option value="'Rubik', sans-serif">Rubik</option>
-          <option value="'IBM Plex Sans', sans-serif">IBM Plex Sans</option>
-          <option value="'Playfair Display', serif">Playfair Display</option>
-          <option value="'Merriweather', serif">Merriweather</option>
-          <option value="'Lora', serif">Lora</option>
-          <option value="'Source Serif 4', serif">Source Serif 4</option>
-          <option value="'Libre Baskerville', serif">Libre Baskerville</option>
-          <option value="'Crimson Text', serif">Crimson Text</option>
-          <option value="Georgia, serif">Georgia</option>
-          <option value="'Times New Roman', serif">Times New Roman</option>
-          <option value="'Courier New', monospace">Courier New</option>
-          <option value="'Brush Script MT', cursive">Brush Script MT</option>
-          <option value="cursive">Cursive</option>
-        </Select>
+
+        <RichTextEditor onChange={(html) => setContent(html)} />
+
         <input
           type="file"
           id="media-upload"
           accept="image/*,video/*"
           onChange={handleFileChange}
-          style={{ display: 'none' }} // Hide the default input
+          style={{ display: 'none' }}
         />
         <FileInputLabel htmlFor="media-upload">
           {mediaFile ? mediaFile.name : 'Choose Image or Video'}
