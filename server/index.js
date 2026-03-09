@@ -182,15 +182,29 @@ const authenticateToken = (req, res, next) => {
 
 app.post("/api/signup", async (req, res) => {
     console.log("Signup request received");
-    const { name, email, password } = req.body;
+    // Added 'code' to the destructuring
+    const { name, email, password, code } = req.body;
 
-    if (!name || !email || !password) {
-        return res
-            .status(400)
-            .json({ error: "Please provide all required fields." });
+    if (!name || !email || !password || !code) {
+        return res.status(400).json({
+            error: "All fields including registration code are required.",
+        });
     }
 
     try {
+        // 1. Verify the registration code is active and correct
+        const validCode = await dbGet(sql`
+            SELECT * FROM registration_codes 
+            WHERE code = ${code.toUpperCase()} AND is_active = true
+        `);
+
+        if (!validCode) {
+            return res
+                .status(401)
+                .json({ error: "Invalid or expired registration code." });
+        }
+
+        // 2. Proceed with existing signup logic
         const hashedPassword = await bcrypt.hash(password, 10);
         const avatar_url = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`;
         const about_me = "New community member";
@@ -1086,27 +1100,107 @@ app.post("/api/comments/:id/like", authenticateToken, async (req, res) => {
 });
 
 //create admine route
-app.post("/api/create-admin", RequireAdmin, async (req, res) => {
-    const { name, email, password } = req.body;
+app.post(
+    "/api/create-admin",
+    authenticateToken,
+    RequireAdmin,
+    async (req, res) => {
+        const { name, email, password } = req.body;
 
-    try {
-        const hashedPassword = await bcrypt.hash(password, 10);
-        const avatar_url = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`;
-        const about_me = "Admin account";
+        try {
+            const hashedPassword = await bcrypt.hash(password, 10);
+            const avatar_url = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`;
+            const about_me = "Admin account";
 
-        await dbRun(sql`
+            await dbRun(sql`
             INSERT INTO students (name, email, password, avatar_url, about_me, role)
             VALUES (${name}, ${email}, ${hashedPassword}, ${avatar_url}, ${about_me}, 'admin')
         `);
 
-        res.json({ message: "Admin created" });
+            res.json({ message: "Admin created" });
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ error: "Failed to create admin" });
+        }
+    },
+);
+// make codes
+app.post(
+    "/api/generate-registration-code",
+    authenticateToken,
+    RequireAdmin,
+    async (req, res) => {
+        const { code, semester } = req.body;
+
+        if (!code || !semester) {
+            return res
+                .status(400)
+                .json({ error: "Code and semester are required." });
+        }
+
+        try {
+            // Use a transaction to ensure we only have one active code at a time
+            await sql.begin(async (tx) => {
+                // 1. Deactivate all previous codes
+                await tx`UPDATE registration_codes SET is_active = false WHERE is_active = true`;
+
+                // 2. Insert the new code
+                await tx`
+                INSERT INTO registration_codes (code, semester, is_active)
+                VALUES (${code.toUpperCase()}, ${semester}, true)
+            `;
+            });
+
+            return res.status(201).json({
+                message: "Registration code generated and activated.",
+            });
+        } catch (error) {
+            console.error("Error generating registration code:", error);
+            return res
+                .status(500)
+                .json({ error: "Failed to generate registration code." });
+        }
+    },
+);
+
+// get codes
+app.get(
+    "/api/registration-codes",
+    authenticateToken,
+    RequireAdmin,
+    async (req, res) => {
+        try {
+            const codes = await dbAll(sql`
+            SELECT code_id, code, semester, is_active, created_at 
+            FROM registration_codes 
+            ORDER BY created_at DESC
+        `);
+            return res.json(codes);
+        } catch (error) {
+            console.error("Error fetching codes:", error);
+            return res.status(500).json({ error: "Failed to fetch codes." });
+        }
+    },
+);
+
+// validate codes
+app.get("/api/validate-code/:code", async (req, res) => {
+    try {
+        const { code } = req.params;
+        const validCode = await dbGet(sql`
+            SELECT 1 FROM registration_codes 
+            WHERE code = ${code.toUpperCase()} AND is_active = true
+        `);
+
+        return res.json({ isValid: !!validCode });
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: "Failed to create admin" });
+        console.error("Error validating code:", error);
+        return res.status(500).json({ error: "Validation error" });
     }
 });
 
-app.get("/api/me", authenticateToken, async (req, res) => {
+//api/me
+app.get("/api/me", authenticateToken, RequireAdmin, async (req, res) => {
     try {
         const user = await dbGet(
             "SELECT id, name, email, role FROM students WHERE id = $1",

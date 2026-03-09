@@ -8,6 +8,8 @@ import {
 } from "react-icons/fi";
 import { exportUserData } from "../utils/FetchData.js";
 import { getAuthTokenOrLogout } from "../utils/auth";
+import ReigistrationCodeManager from "../components/RegistrationCodeManager.jsx";
+import { FiList } from "react-icons/fi";
 
 const SettingsPage = styled.div`
     margin: -2.5rem;
@@ -181,6 +183,7 @@ const Settings = () => {
     const [exporting, setExporting] = React.useState(false);
     const [dialog, setDialog] = React.useState(null);
     const [user, setUser] = React.useState(null);
+    const [showManageModal, setShowManageModal] = React.useState(false);
 
     useEffect(() => {
         const token = getAuthTokenOrLogout();
@@ -263,19 +266,21 @@ const Settings = () => {
             return;
         }
 
+        const token = getAuthTokenOrLogout();
+
         try {
-            const res = await fetch("/api/admin/create-admin", {
+            const res = await fetch("/api/create-admin", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
                 },
-                credentials: "include",
                 body: JSON.stringify({ email, password, name }),
             });
 
             const data = await res.json();
 
-            if (data.success) {
+            if (res.ok) {
                 alert("Admin created successfully");
             } else {
                 alert(data.error || "Failed to create admin");
@@ -287,6 +292,52 @@ const Settings = () => {
     if (loading) {
         return <div>Loading settings...</div>;
     }
+    const generateRandomCode = () => {
+        const characters = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // Excluded confusing chars like 0, O, 1, I
+        let result = "";
+        for (let i = 0; i < 5; i++) {
+            result += characters.charAt(
+                Math.floor(Math.random() * characters.length),
+            );
+        }
+        return result;
+    };
+
+    const handleGenerateCode = async () => {
+        const semester = prompt("Enter the semester (e.g., Fall 2026):");
+        if (!semester) return;
+
+        const newCode = generateRandomCode();
+        const token = getAuthTokenOrLogout();
+
+        try {
+            const res = await fetch("/api/generate-registration-code", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                    code: newCode,
+                    semester: semester,
+                }),
+            });
+
+            if (res.ok) {
+                setDialog({
+                    title: "Code Generated!",
+                    message: `New code for ${semester}: ${newCode}\n\nStudents can now use this to register.`,
+                    confirmLabel: "Done",
+                    onConfirm: closeDialog,
+                    cancelLabel: null,
+                });
+            } else {
+                alert("Failed to save code to database.");
+            }
+        } catch (error) {
+            console.error("Error generating code:", error);
+        }
+    };
 
     return (
         <SettingsPage>
@@ -356,6 +407,62 @@ const Settings = () => {
                         </ActionButton>
                     </SettingCard>
                 )}
+                {isAdmin && (
+                    <SettingCard>
+                        <CardHeader>
+                            <IconBadge>
+                                <FiDatabase size={17} />
+                            </IconBadge>
+                            <CardTitle>Registration Codes</CardTitle>
+                        </CardHeader>
+                        <CardDescription>
+                            Generate a random 5-character code or view history
+                            for student registration.
+                        </CardDescription>
+
+                        {/* New Flex container for buttons */}
+                        <div style={{ display: "flex", gap: "0.75rem" }}>
+                            <ActionButton onClick={handleGenerateCode}>
+                                Generate New Code
+                            </ActionButton>
+                            <SecondaryButton
+                                onClick={() => setShowManageModal(true)}
+                                style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "0.5rem",
+                                }}>
+                                <FiList size={16} />
+                                Manage Codes
+                            </SecondaryButton>
+                        </div>
+                    </SettingCard>
+                )}
+
+                {/* Manage Codes Modal Component */}
+                {showManageModal && (
+                    <ReigistrationCodeManager
+                        onClose={() => setShowManageModal(false)}
+                    />
+                )}
+                {/* {isAdmin && (
+                    <SettingCard>
+                        <CardHeader>
+                            <IconBadge>
+                                <FiShield size={17} />
+                            </IconBadge>
+                            <CardTitle>Admin Dashboard</CardTitle>
+                        </CardHeader>
+
+                        <CardDescription>
+                            Open the admin dashboard to view user reports 
+                        </CardDescription>
+
+                        <ActionButton onClick={}>
+                            Create Admin
+                        </ActionButton>
+                    </SettingCard>
+                )} */}
             </SettingsGrid>
             {dialog && (
                 <ModalOverlay onClick={closeDialog}>
