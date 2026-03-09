@@ -73,93 +73,101 @@ const ensureApprovalStatusColumn = async () => {
 };
 
 const initializeDatabase = async () => {
-    const tableExists = await sql`
-        SELECT EXISTS (
-            SELECT FROM information_schema.tables
-            WHERE table_name = 'students'
-        )
-    `;
+    const originalLog = console.log;
+    console.log = () => {}; // silence logs
+    try {
+        const tableExists = await sql`
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables
+                WHERE table_name = 'students'
+            )
+        `;
 
-    if (!tableExists[0].exists) {
-        console.log("Initializing database schema...");
+        if (!tableExists[0].exists) {
+            console.log("Initializing database schema...");
 
-        const schema = fs.readFileSync(SCHEMA_PATH, "utf8");
+            const schema = fs.readFileSync(SCHEMA_PATH, "utf8");
 
-        const cleanedSchema = schema
-            .split("\n")
-            .filter((line) => !line.trim().startsWith("--"))
-            .join("\n");
+            const cleanedSchema = schema
+                .split("\n")
+                .filter((line) => !line.trim().startsWith("--"))
+                .join("\n");
 
-        const statements = cleanedSchema
-            .split(/;\s*(?:\n|$)/g)
-            .map((statement) => statement.trim())
-            .filter(Boolean);
+            const statements = cleanedSchema
+                .split(/;\s*(?:\n|$)/g)
+                .map((statement) => statement.trim())
+                .filter(Boolean);
 
-        for (const statement of statements) {
-            await sql.unsafe(statement);
+            for (const statement of statements) {
+                await sql.unsafe(statement);
+            }
+            console.log("Database schema initialized successfully.");
+        } else {
+            console.log(
+                "Database schema already exists. Running compatibility migrations.",
+            );
         }
-        console.log("Database schema initialized successfully.");
-    } else {
-        console.log("Database schema already exists. Running compatibility migrations.");
+
+        // Compatibility migrations for existing databases.
+        await sql.unsafe(
+            "ALTER TABLE students ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user'",
+        );
+        await ensureApprovalStatusColumn();
+        await sql.unsafe(
+            "ALTER TABLE students ADD COLUMN IF NOT EXISTS appearance_theme TEXT",
+        );
+        await sql.unsafe(
+            "ALTER TABLE students ADD COLUMN IF NOT EXISTS font_family TEXT",
+        );
+        await sql.unsafe(
+            "ALTER TABLE students ADD COLUMN IF NOT EXISTS accent_color TEXT",
+        );
+        await sql.unsafe(
+            "ALTER TABLE students ADD COLUMN IF NOT EXISTS font_size TEXT",
+        );
+        await sql.unsafe(
+            "ALTER TABLE students ADD COLUMN IF NOT EXISTS profile_background_url TEXT",
+        );
+        await sql.unsafe(
+            "ALTER TABLE posts ADD COLUMN IF NOT EXISTS is_hidden INTEGER DEFAULT 0",
+        );
+        await sql.unsafe(
+            "ALTER TABLE posts ADD COLUMN IF NOT EXISTS display_order INTEGER",
+        );
+        await sql.unsafe(
+            "ALTER TABLE posts ADD COLUMN IF NOT EXISTS post_font_family TEXT",
+        );
+
+        await sql.unsafe(
+            `CREATE TABLE IF NOT EXISTS comment_likes (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES students(id),
+                comment_id INTEGER NOT NULL REFERENCES comments(id),
+                UNIQUE(user_id, comment_id)
+            )`,
+        );
+        await sql.unsafe(
+            "ALTER TABLE comments ADD COLUMN IF NOT EXISTS likes INTEGER DEFAULT 0",
+        );
+
+        await sql.unsafe(
+            "CREATE INDEX IF NOT EXISTS idx_comment_likes_comment_user ON comment_likes (comment_id, user_id)",
+        );
+        await sql.unsafe(
+            "CREATE INDEX IF NOT EXISTS idx_posts_visibility_created_at ON posts (is_hidden, created_at DESC)",
+        );
+        await sql.unsafe(
+            "CREATE INDEX IF NOT EXISTS idx_posts_student_order_created ON posts (student_id, display_order, created_at DESC)",
+        );
+        await sql.unsafe(
+            "CREATE INDEX IF NOT EXISTS idx_comments_post_created ON comments (post_id, created_at ASC)",
+        );
+        await sql.unsafe(
+            "CREATE INDEX IF NOT EXISTS idx_likes_post_user ON likes (post_id, user_id)",
+        );
+    } finally {
+        console.log = originalLog;
     }
-
-    // Compatibility migrations for existing databases.
-    await sql.unsafe(
-        "ALTER TABLE students ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user'",
-    );
-    await ensureApprovalStatusColumn();
-    await sql.unsafe(
-        "ALTER TABLE students ADD COLUMN IF NOT EXISTS appearance_theme TEXT",
-    );
-    await sql.unsafe(
-        "ALTER TABLE students ADD COLUMN IF NOT EXISTS font_family TEXT",
-    );
-    await sql.unsafe(
-        "ALTER TABLE students ADD COLUMN IF NOT EXISTS accent_color TEXT",
-    );
-    await sql.unsafe(
-        "ALTER TABLE students ADD COLUMN IF NOT EXISTS font_size TEXT",
-    );
-    await sql.unsafe(
-        "ALTER TABLE students ADD COLUMN IF NOT EXISTS profile_background_url TEXT",
-    );
-    await sql.unsafe(
-        "ALTER TABLE posts ADD COLUMN IF NOT EXISTS is_hidden INTEGER DEFAULT 0",
-    );
-    await sql.unsafe(
-        "ALTER TABLE posts ADD COLUMN IF NOT EXISTS display_order INTEGER",
-    );
-    await sql.unsafe(
-        "ALTER TABLE posts ADD COLUMN IF NOT EXISTS post_font_family TEXT",
-    );
-
-    await sql.unsafe(
-        `CREATE TABLE IF NOT EXISTS comment_likes (
-            id SERIAL PRIMARY KEY,
-            user_id INTEGER NOT NULL REFERENCES students(id),
-            comment_id INTEGER NOT NULL REFERENCES comments(id),
-            UNIQUE(user_id, comment_id)
-        )`,
-    );
-    await sql.unsafe(
-        "ALTER TABLE comments ADD COLUMN IF NOT EXISTS likes INTEGER DEFAULT 0",
-    );
-
-    await sql.unsafe(
-        "CREATE INDEX IF NOT EXISTS idx_comment_likes_comment_user ON comment_likes (comment_id, user_id)",
-    );
-    await sql.unsafe(
-        "CREATE INDEX IF NOT EXISTS idx_posts_visibility_created_at ON posts (is_hidden, created_at DESC)",
-    );
-    await sql.unsafe(
-        "CREATE INDEX IF NOT EXISTS idx_posts_student_order_created ON posts (student_id, display_order, created_at DESC)",
-    );
-    await sql.unsafe(
-        "CREATE INDEX IF NOT EXISTS idx_comments_post_created ON comments (post_id, created_at ASC)",
-    );
-    await sql.unsafe(
-        "CREATE INDEX IF NOT EXISTS idx_likes_post_user ON likes (post_id, user_id)",
-    );
 };
 
 app.use(cors());
@@ -243,7 +251,6 @@ const galleryUpload = multer({
 });
 
 const authenticateToken = (req, res, next) => {
-    console.log("Inside authenticateToken middleware");
     const authHeader = req.headers["authorization"];
     const token = authHeader && authHeader.split(" ")[1];
 
@@ -257,7 +264,6 @@ const authenticateToken = (req, res, next) => {
         if (err) {
             return res.status(403).json({ error: "Invalid or expired token." });
         }
-        console.log("Token verified for user:", user);
         req.user = user;
         next();
     });
@@ -1297,7 +1303,6 @@ app.get(
     authenticateToken,
     RequireAdmin,
     async (req, res) => {
-        console.log("Inside /api/students/pending route handler");
         try {
             const students = await dbAll(
                 "SELECT id, name, email FROM students WHERE approval_status = 'pending'",
