@@ -84,7 +84,11 @@ const ApproveAllBtn = styled.button`
 
 const StudentAcceptanceModal = ({ onClose }) => {
     const navigate = useNavigate();
+
     const [students, setStudents] = useState([]);
+    const [page, setPage] = useState(1);
+
+    const limit = 10;
 
     useEffect(() => {
         const loadPendingStudents = async () => {
@@ -92,9 +96,13 @@ const StudentAcceptanceModal = ({ onClose }) => {
             if (!token) return;
 
             try {
-                const res = await fetch("/api/students/pending", {
-                    headers: { Authorization: `Bearer ${token}` },
-                });
+                const res = await fetch(
+                    `/api/students/pending?page=${page}&limit=${limit}`,
+                    {
+                        headers: { Authorization: `Bearer ${token}` },
+                    },
+                );
+
                 if (!res.ok) {
                     setStudents([]);
                     return;
@@ -108,7 +116,7 @@ const StudentAcceptanceModal = ({ onClose }) => {
         };
 
         loadPendingStudents();
-    }, [navigate]);
+    }, [navigate, page]);
 
     const approveStudent = async (id) => {
         const token = getAuthTokenOrLogout(navigate);
@@ -118,9 +126,16 @@ const StudentAcceptanceModal = ({ onClose }) => {
             method: "POST",
             headers: { Authorization: `Bearer ${token}` },
         });
+
         if (!res.ok) return;
 
-        setStudents((prev) => prev.filter((s) => s.id !== id));
+        const updated = students.filter((s) => s.id !== id);
+
+        if (updated.length === 0 && page > 1) {
+            setPage((p) => p - 1);
+        } else {
+            setStudents(updated);
+        }
     };
 
     const denyStudent = async (id) => {
@@ -131,9 +146,16 @@ const StudentAcceptanceModal = ({ onClose }) => {
             method: "POST",
             headers: { Authorization: `Bearer ${token}` },
         });
+
         if (!res.ok) return;
 
-        setStudents((prev) => prev.filter((s) => s.id !== id));
+        const updated = students.filter((s) => s.id !== id);
+
+        if (updated.length === 0 && page > 1) {
+            setPage((p) => p - 1);
+        } else {
+            setStudents(updated);
+        }
     };
 
     const approveAll = async () => {
@@ -145,9 +167,10 @@ const StudentAcceptanceModal = ({ onClose }) => {
                 method: "POST",
                 headers: { Authorization: `Bearer ${token}` },
             });
+
             if (!res.ok) return;
 
-            setStudents([]); // clears list instantly
+            setStudents([]);
         } catch (err) {
             console.error("Error approving all students:", err);
         }
@@ -171,36 +194,63 @@ const StudentAcceptanceModal = ({ onClose }) => {
                 {students.length === 0 ? (
                     <p style={{ marginTop: "1rem" }}>No pending students.</p>
                 ) : (
-                    <div style={{ marginTop: "1rem" }}>
-                        {students.map((student) => (
-                            <StudentRow key={student.id}>
-                                <div>
-                                    <strong>{student.name}</strong>
-                                    <div
-                                        style={{
-                                            fontSize: "0.8rem",
-                                            color: "#64748b",
-                                        }}>
-                                        {student.email}
+                    <>
+                        <div style={{ marginTop: "1rem" }}>
+                            {students.map((student) => (
+                                <StudentRow key={student.id}>
+                                    <div>
+                                        <strong>{student.name}</strong>
+                                        <div
+                                            style={{
+                                                fontSize: "0.8rem",
+                                                color: "#64748b",
+                                            }}>
+                                            {student.email}
+                                        </div>
                                     </div>
-                                </div>
 
-                                <ButtonGroup>
-                                    <ApproveBtn
-                                        onClick={() =>
-                                            approveStudent(student.id)
-                                        }>
-                                        Approve
-                                    </ApproveBtn>
+                                    <ButtonGroup>
+                                        <ApproveBtn
+                                            onClick={() =>
+                                                approveStudent(student.id)
+                                            }>
+                                            Approve
+                                        </ApproveBtn>
 
-                                    <DenyBtn
-                                        onClick={() => denyStudent(student.id)}>
-                                        Deny
-                                    </DenyBtn>
-                                </ButtonGroup>
-                            </StudentRow>
-                        ))}
-                    </div>
+                                        <DenyBtn
+                                            onClick={() =>
+                                                denyStudent(student.id)
+                                            }>
+                                            Deny
+                                        </DenyBtn>
+                                    </ButtonGroup>
+                                </StudentRow>
+                            ))}
+                        </div>
+
+                        {/* Pagination */}
+                        <div
+                            style={{
+                                display: "flex",
+                                justifyContent: "center",
+                                gap: "1rem",
+                                marginTop: "1rem",
+                            }}>
+                            <button
+                                disabled={page === 1}
+                                onClick={() => setPage((p) => p - 1)}>
+                                Previous
+                            </button>
+
+                            <span>Page {page}</span>
+
+                            <button
+                                disabled={students.length < limit}
+                                onClick={() => setPage((p) => p + 1)}>
+                                Next
+                            </button>
+                        </div>
+                    </>
                 )}
             </ModalCard>
         </ModalOverlay>

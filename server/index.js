@@ -1304,8 +1304,16 @@ app.get(
     RequireAdmin,
     async (req, res) => {
         try {
+            const page = parseInt(req.query.page) || 1;
+            const limit = parseInt(req.query.limit) || 10;
+            const offset = (page - 1) * limit;
+
             const students = await dbAll(
-                "SELECT id, name, email FROM students WHERE approval_status = 'pending'",
+                `SELECT id, name, email
+                 FROM students
+                 WHERE approval_status = 'pending'
+                 LIMIT $1 OFFSET $2`,
+                [limit, offset],
             ).catch(async (error) => {
                 const message = String(error?.message || "");
                 if (message.includes("approval_status")) {
@@ -1316,11 +1324,12 @@ app.get(
                 }
                 throw error;
             });
+
             return res.json(Array.isArray(students) ? students : []);
         } catch (error) {
             console.log("Caught error in /api/students/pending:", error);
             console.error("Error fetching pending students:", error);
-            // Failsafe: do not break admin settings UI if schema/env differs.
+
             return res.status(200).json([]);
         }
     },
@@ -1355,15 +1364,12 @@ app.post(
         const { id } = req.params;
 
         try {
-            await dbRun(
-                "UPDATE students SET approval_status = $1 WHERE id = $2",
-                ["denied", id],
-            );
+            await dbRun("DELETE FROM students WHERE id = $1", [id]);
 
-            res.json({ message: "Student denied." });
+            res.json({ message: "Student denied and deleted." });
         } catch (error) {
             console.error(error);
-            res.status(500).json({ error: "Failed to deny student." });
+            res.status(500).json({ error: "Failed to delete student." });
         }
     },
 );
