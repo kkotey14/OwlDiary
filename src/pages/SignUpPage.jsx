@@ -257,9 +257,9 @@ const CodeInput = styled.input`
 
     border: 2px solid
         ${(props) =>
-            props.codeLength < 5
+            props.$codeLength < 5
                 ? "#0f172a"
-                : props.isValid
+                : props.$isValid
                   ? "#22c55e"
                   : "#ef4444"};
     transition: border-color 0.3s ease;
@@ -401,8 +401,8 @@ const SignUpPage = () => {
                     <CodeInputWrapper>
                         <CodeLabel>Registration Code</CodeLabel>
                         <CodeInput
-                            isValid={isCodeValid}
-                            codeLength={registrationCode.length}
+                            $isValid={isCodeValid}
+                            $codeLength={registrationCode.length}
                             type="text"
                             placeholder="_____"
                             required

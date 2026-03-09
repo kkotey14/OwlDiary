@@ -107,6 +107,7 @@ const Sidebar = ({ onCreatePost }) => {
   const navigate = useNavigate();
   const [isNotifyOpen, setIsNotifyOpen] = useState(false);
   const bellRef = useRef(null);
+  
   const myProfilePath = useMemo(() => {
     const token = getAuthTokenOrLogout(navigate);
     if (!token) return '/login';

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import styled from "styled-components";
+import { useNavigate } from "react-router-dom";
 import { getAuthTokenOrLogout } from "../utils/auth";
 import { FiX } from "react-icons/fi";
 
@@ -73,21 +74,31 @@ const StatusBadge = styled.span`
     border-radius: 12px;
     font-size: 0.75rem;
     font-weight: 500;
-    background: ${(props) => (props.active ? "#ecfdf5" : "#f1f5f9")};
-    color: ${(props) => (props.active ? "#059669" : "#64748b")};
+    background: ${(props) => (props.$active ? "#ecfdf5" : "#f1f5f9")};
+    color: ${(props) => (props.$active ? "#059669" : "#64748b")};
 `;
 
 const ManageCodesModal = ({ onClose }) => {
+    const navigate = useNavigate();
     const [codes, setCodes] = useState([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         const fetchCodes = async () => {
-            const token = getAuthTokenOrLogout();
+            const token = getAuthTokenOrLogout(navigate);
+            if (!token) {
+                setLoading(false);
+                return;
+            }
+
             try {
                 const res = await fetch("/api/registration-codes", {
                     headers: { Authorization: `Bearer ${token}` },
                 });
+                if (!res.ok) {
+                    setCodes([]);
+                    return;
+                }
                 const data = await res.json();
                 setCodes(Array.isArray(data) ? data : []);
             } catch (err) {
@@ -96,8 +107,9 @@ const ManageCodesModal = ({ onClose }) => {
                 setLoading(false);
             }
         };
+
         fetchCodes();
-    }, []);
+    }, [navigate]);
 
     return (
         <ModalOverlay onClick={onClose}>
@@ -123,31 +135,29 @@ const ManageCodesModal = ({ onClose }) => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {codes.map((c) => (
-                                    <tr key={c.code_id}>
+                                {codes.map((codeRow) => (
+                                    <tr key={codeRow.code_id}>
                                         <td
                                             style={{
                                                 fontWeight: "bold",
                                                 color: "#2563eb",
-                                            }}>
-                                            {c.code}
+                                            }}
+                                        >
+                                            {codeRow.code}
                                         </td>
-                                        <td>{c.semester}</td>
+                                        <td>{codeRow.semester}</td>
                                         <td>
-                                            <StatusBadge active={c.is_active}>
-                                                {c.is_active
-                                                    ? "Active"
-                                                    : "Inactive"}
+                                            <StatusBadge $active={codeRow.is_active}>
+                                                {codeRow.is_active ? "Active" : "Inactive"}
                                             </StatusBadge>
                                         </td>
                                         <td
                                             style={{
                                                 color: "#94a3b8",
                                                 fontSize: "0.8rem",
-                                            }}>
-                                            {new Date(
-                                                c.created_at,
-                                            ).toLocaleDateString()}
+                                            }}
+                                        >
+                                            {new Date(codeRow.created_at).toLocaleDateString()}
                                         </td>
                                     </tr>
                                 ))}

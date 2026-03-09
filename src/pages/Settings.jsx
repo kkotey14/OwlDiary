@@ -1,15 +1,16 @@
 import React, { useEffect } from "react";
 import styled from "styled-components";
+import { useNavigate } from "react-router-dom";
 import {
     FiDownload,
     FiExternalLink,
     FiShield,
     FiDatabase,
+    FiList
 } from "react-icons/fi";
 import { exportUserData } from "../utils/FetchData.js";
 import { getAuthTokenOrLogout } from "../utils/auth";
-import ReigistrationCodeManager from "../components/RegistrationCodeManager.jsx";
-import { FiList } from "react-icons/fi";
+import RegistrationCodeManager from "../components/RegistrationCodeManager.jsx";
 import StudentAcceptanceModal from "../components/StudentAcceptanceModal.jsx";
 
 const SettingsPage = styled.div`
@@ -180,6 +181,7 @@ const ModalPrimaryButton = styled(ActionButton)`
 `;
 
 const Settings = () => {
+    const navigate = useNavigate();
     const [loading, setLoading] = React.useState(true);
     const [exporting, setExporting] = React.useState(false);
     const [dialog, setDialog] = React.useState(null);
@@ -189,37 +191,40 @@ const Settings = () => {
     const [pendingCount, setPendingCount] = React.useState(0);
 
     useEffect(() => {
-        const loadCount = async () => {
-            const token = getAuthTokenOrLogout();
+        const loadSettingsData = async () => {
+            const token = getAuthTokenOrLogout(navigate);
+            if (!token) return;
 
-            const res = await fetch("/api/students/pending", {
-                headers: { Authorization: `Bearer ${token}` },
-            });
+            try {
+                // Fetch user data
+                const meRes = await fetch("/api/me", {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+                
+                if (meRes.ok) {
+                    const me = await meRes.json();
+                    setUser(me);
 
-            const data = await res.json();
-            setPendingCount(data.length || 0);
+                    // If admin, fetch pending count
+                    if (me.role === "admin") {
+                        const pendingRes = await fetch("/api/students/pending", {
+                            headers: { Authorization: `Bearer ${token}` },
+                        });
+                        if (pendingRes.ok) {
+                            const pendingData = await pendingRes.json();
+                            setPendingCount(Array.isArray(pendingData) ? pendingData.length : 0);
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error("Error loading settings data:", error);
+            } finally {
+                setLoading(false);
+            }
         };
 
-        loadCount();
-    }, []);
-
-    useEffect(() => {
-        const token = getAuthTokenOrLogout();
-
-        fetch("/api/me", {
-            headers: {
-                Authorization: `Bearer ${token}`,
-            },
-        })
-            .then((res) => res.json())
-            .then((data) => {
-                setUser(data);
-                setLoading(false);
-            })
-            .catch(() => {
-                setLoading(false);
-            });
-    }, []);
+        loadSettingsData();
+    }, [navigate]);
 
     const isAdmin = user?.role === "admin";
 
@@ -284,7 +289,7 @@ const Settings = () => {
             return;
         }
 
-        const token = getAuthTokenOrLogout();
+        const token = getAuthTokenOrLogout(navigate);
 
         try {
             const res = await fetch("/api/create-admin", {
@@ -307,9 +312,7 @@ const Settings = () => {
             console.error("Admin creation failed:", error);
         }
     };
-    if (loading) {
-        return <div>Loading settings...</div>;
-    }
+
     const generateRandomCode = () => {
         const characters = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // Excluded confusing chars like 0, O, 1, I
         let result = "";
@@ -326,7 +329,7 @@ const Settings = () => {
         if (!semester) return;
 
         const newCode = generateRandomCode();
-        const token = getAuthTokenOrLogout();
+        const token = getAuthTokenOrLogout(navigate);
 
         try {
             const res = await fetch("/api/generate-registration-code", {
@@ -356,6 +359,10 @@ const Settings = () => {
             console.error("Error generating code:", error);
         }
     };
+
+    if (loading) {
+        return <div>Loading settings...</div>;
+    }
 
     return (
         <SettingsPage>
@@ -470,7 +477,7 @@ const Settings = () => {
 
                 {/* Manage Codes Modal Component */}
                 {showManageModal && (
-                    <ReigistrationCodeManager
+                    <RegistrationCodeManager
                         onClose={() => setShowManageModal(false)}
                     />
                 )}
@@ -479,24 +486,6 @@ const Settings = () => {
                         onClose={() => setShowStudentModal(false)}
                     />
                 )}
-                {/* {isAdmin && (
-                    <SettingCard>
-                        <CardHeader>
-                            <IconBadge>
-                                <FiShield size={17} />
-                            </IconBadge>
-                            <CardTitle>Admin Dashboard</CardTitle>
-                        </CardHeader>
-
-                        <CardDescription>
-                            Open the admin dashboard to view user reports 
-                        </CardDescription>
-
-                        <ActionButton onClick={}>
-                            Create Admin
-                        </ActionButton>
-                    </SettingCard>
-                )} */}
             </SettingsGrid>
             {dialog && (
                 <ModalOverlay onClick={closeDialog}>

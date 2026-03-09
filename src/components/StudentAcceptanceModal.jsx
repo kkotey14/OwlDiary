@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import styled from "styled-components";
+import { useNavigate } from "react-router-dom";
 import { FiX } from "react-icons/fi";
 import { getAuthTokenOrLogout } from "../utils/auth";
 
@@ -82,16 +83,22 @@ const ApproveAllBtn = styled.button`
 `;
 
 const StudentAcceptanceModal = ({ onClose }) => {
+    const navigate = useNavigate();
     const [students, setStudents] = useState([]);
 
     useEffect(() => {
         const loadPendingStudents = async () => {
-            const token = getAuthTokenOrLogout();
+            const token = getAuthTokenOrLogout(navigate);
+            if (!token) return;
 
             try {
                 const res = await fetch("/api/students/pending", {
                     headers: { Authorization: `Bearer ${token}` },
                 });
+                if (!res.ok) {
+                    setStudents([]);
+                    return;
+                }
 
                 const data = await res.json();
                 setStudents(Array.isArray(data) ? data : []);
@@ -101,38 +108,44 @@ const StudentAcceptanceModal = ({ onClose }) => {
         };
 
         loadPendingStudents();
-    }, []);
+    }, [navigate]);
 
     const approveStudent = async (id) => {
-        const token = getAuthTokenOrLogout();
+        const token = getAuthTokenOrLogout(navigate);
+        if (!token) return;
 
-        await fetch(`/api/students/${id}/approve`, {
+        const res = await fetch(`/api/students/${id}/approve`, {
             method: "POST",
             headers: { Authorization: `Bearer ${token}` },
         });
+        if (!res.ok) return;
 
         setStudents((prev) => prev.filter((s) => s.id !== id));
     };
 
     const denyStudent = async (id) => {
-        const token = getAuthTokenOrLogout();
+        const token = getAuthTokenOrLogout(navigate);
+        if (!token) return;
 
-        await fetch(`/api/students/${id}/deny`, {
+        const res = await fetch(`/api/students/${id}/deny`, {
             method: "POST",
             headers: { Authorization: `Bearer ${token}` },
         });
+        if (!res.ok) return;
 
         setStudents((prev) => prev.filter((s) => s.id !== id));
     };
 
     const approveAll = async () => {
-        const token = getAuthTokenOrLogout();
+        const token = getAuthTokenOrLogout(navigate);
+        if (!token) return;
 
         try {
-            await fetch("/api/students/approve-all", {
+            const res = await fetch("/api/students/approve-all", {
                 method: "POST",
                 headers: { Authorization: `Bearer ${token}` },
             });
+            if (!res.ok) return;
 
             setStudents([]); // clears list instantly
         } catch (err) {
