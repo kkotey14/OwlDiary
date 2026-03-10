@@ -5,6 +5,7 @@ import { FiHeart, FiMessageSquare, FiArrowLeft, FiEdit2, FiTrash2 } from 'react-
 import { resolveMediaUrl } from '../utils/media';
 import { getAuthTokenOrLogout, handleAuthFailure } from '../utils/auth';
 import { jwtDecode } from 'jwt-decode';
+import DOMPurify from 'dompurify';
 
 
 // ─── Styled Components ────────────────────────────────────────────────────────
@@ -715,7 +716,10 @@ const handleDeleteComment = async (commentId) => {
         )}
 
 
-        <PostContent style={{ fontFamily: postFont }}>{post.content}</PostContent>
+        <PostContent
+          style={{ fontFamily: postFont }}
+          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(post.content) }}
+        />
 
 
         <EngagementBar>
