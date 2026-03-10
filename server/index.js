@@ -60,18 +60,6 @@ const dbRun = async (query, params = []) => {
     };
 };
 
-const ensureApprovalStatusColumn = async () => {
-    try {
-        await sql.unsafe(
-            "ALTER TABLE students ADD COLUMN IF NOT EXISTS approval_status TEXT DEFAULT 'pending'",
-        );
-        return true;
-    } catch (error) {
-        console.warn("Could not ensure approval_status column:", error.message);
-        return false;
-    }
-};
-
 const createNotification = async (userId, message, linkUrl = null) => {
     if (!userId || !message) return;
     await dbRun(
@@ -106,74 +94,76 @@ const initializeDatabase = async () => {
                 .map((statement) => statement.trim())
                 .filter(Boolean);
 
-    for (const statement of statements) {
-        await sql.unsafe(statement);
+            for (const statement of statements) {
+                await sql.unsafe(statement);
+            }
+
+            // Ensure compatibility with databases created before newer profile/gallery fields.
+            await sql.unsafe(
+                "ALTER TABLE students ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user'",
+            );
+            await sql.unsafe(
+                "ALTER TABLE students ADD COLUMN IF NOT EXISTS appearance_theme TEXT",
+            );
+            await sql.unsafe(
+                "ALTER TABLE students ADD COLUMN IF NOT EXISTS font_family TEXT",
+            );
+            await sql.unsafe(
+                "ALTER TABLE students ADD COLUMN IF NOT EXISTS accent_color TEXT",
+            );
+            await sql.unsafe(
+                "ALTER TABLE students ADD COLUMN IF NOT EXISTS font_size TEXT",
+            );
+            await sql.unsafe(
+                "ALTER TABLE students ADD COLUMN IF NOT EXISTS profile_background_url TEXT",
+            );
+            await sql.unsafe(
+                "ALTER TABLE posts ADD COLUMN IF NOT EXISTS is_hidden INTEGER DEFAULT 0",
+            );
+            await sql.unsafe(
+                "ALTER TABLE posts ADD COLUMN IF NOT EXISTS display_order INTEGER",
+            );
+            await sql.unsafe(
+                "ALTER TABLE posts ADD COLUMN IF NOT EXISTS post_font_family TEXT",
+            );
+
+            await sql.unsafe(
+                `CREATE TABLE IF NOT EXISTS comment_likes (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES students(id),
+                    comment_id INTEGER NOT NULL REFERENCES comments(id),
+                    UNIQUE(user_id, comment_id)
+                )`,
+            );
+            await sql.unsafe(
+                "ALTER TABLE comments ADD COLUMN IF NOT EXISTS likes INTEGER DEFAULT 0",
+            );
+
+            // index for performance
+            await sql.unsafe(
+                "CREATE INDEX IF NOT EXISTS idx_comment_likes_comment_user ON comment_likes (comment_id, user_id)",
+            );
+
+            // Indexes for common feed/profile/detail queries.
+            await sql.unsafe(
+                "CREATE INDEX IF NOT EXISTS idx_posts_visibility_created_at ON posts (is_hidden, created_at DESC)",
+            );
+            await sql.unsafe(
+                "CREATE INDEX IF NOT EXISTS idx_posts_student_order_created ON posts (student_id, display_order, created_at DESC)",
+            );
+            await sql.unsafe(
+                "CREATE INDEX IF NOT EXISTS idx_comments_post_created ON comments (post_id, created_at ASC)",
+            );
+            await sql.unsafe(
+                "CREATE INDEX IF NOT EXISTS idx_likes_post_user ON likes (post_id, user_id)",
+            );
+            await sql.unsafe(
+                "CREATE INDEX IF NOT EXISTS idx_gallery_student_created ON profile_gallery (student_id, created_at DESC)",
+            );
+        }
+    } finally {
+        console.log = originalLog;
     }
-
-    // Ensure compatibility with databases created before newer profile/gallery fields.
-    await sql.unsafe(
-        "ALTER TABLE students ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user'",
-    );
-    await sql.unsafe(
-        "ALTER TABLE students ADD COLUMN IF NOT EXISTS appearance_theme TEXT",
-    );
-    await sql.unsafe(
-        "ALTER TABLE students ADD COLUMN IF NOT EXISTS font_family TEXT",
-    );
-    await sql.unsafe(
-        "ALTER TABLE students ADD COLUMN IF NOT EXISTS accent_color TEXT",
-    );
-    await sql.unsafe(
-        "ALTER TABLE students ADD COLUMN IF NOT EXISTS font_size TEXT",
-    );
-    await sql.unsafe(
-        "ALTER TABLE students ADD COLUMN IF NOT EXISTS profile_background_url TEXT",
-    );
-    await sql.unsafe(
-        "ALTER TABLE posts ADD COLUMN IF NOT EXISTS is_hidden INTEGER DEFAULT 0",
-    );
-    await sql.unsafe(
-        "ALTER TABLE posts ADD COLUMN IF NOT EXISTS display_order INTEGER",
-    );
-    await sql.unsafe(
-        "ALTER TABLE posts ADD COLUMN IF NOT EXISTS post_font_family TEXT",
-    );
-
-        await sql.unsafe(
-            `CREATE TABLE IF NOT EXISTS comment_likes (
-                id SERIAL PRIMARY KEY,
-                user_id INTEGER NOT NULL REFERENCES students(id),
-                comment_id INTEGER NOT NULL REFERENCES comments(id),
-                UNIQUE(user_id, comment_id)
-            )`,
-        );
-        await sql.unsafe(
-            "ALTER TABLE comments ADD COLUMN IF NOT EXISTS likes INTEGER DEFAULT 0",
-        );
-
-    // index for performance
-    await sql.unsafe(
-        "CREATE INDEX IF NOT EXISTS idx_comment_likes_comment_user ON comment_likes (comment_id, user_id)"
-    );
-
-
-
-    // Indexes for common feed/profile/detail queries.
-    await sql.unsafe(
-        "CREATE INDEX IF NOT EXISTS idx_posts_visibility_created_at ON posts (is_hidden, created_at DESC)",
-    );
-    await sql.unsafe(
-        "CREATE INDEX IF NOT EXISTS idx_posts_student_order_created ON posts (student_id, display_order, created_at DESC)",
-    );
-    await sql.unsafe(
-        "CREATE INDEX IF NOT EXISTS idx_comments_post_created ON comments (post_id, created_at ASC)",
-    );
-    await sql.unsafe(
-        "CREATE INDEX IF NOT EXISTS idx_likes_post_user ON likes (post_id, user_id)",
-    );
-    await sql.unsafe(
-        "CREATE INDEX IF NOT EXISTS idx_gallery_student_created ON profile_gallery (student_id, created_at DESC)",
-    );
 };
 
 app.use(cors());
@@ -1154,11 +1144,15 @@ app.put("/api/profile/gallery/reorder", authenticateToken, async (req, res) => {
         const ownedSet = new Set(owned.map((row) => Number(row.id)));
         const incomingSet = new Set(photoIds.map((id) => Number(id)));
         if (incomingSet.size !== ownedSet.size) {
-            return res.status(400).json({ error: "photoIds must include all gallery photos." });
+            return res
+                .status(400)
+                .json({ error: "photoIds must include all gallery photos." });
         }
         for (const id of incomingSet) {
             if (!ownedSet.has(id)) {
-                return res.status(403).json({ error: "Invalid gallery photo list." });
+                return res
+                    .status(403)
+                    .json({ error: "Invalid gallery photo list." });
             }
         }
 
@@ -1563,7 +1557,7 @@ app.post(
 );
 
 //api/me
-app.get("/api/me", authenticateToken, RequireAdmin, async (req, res) => {
+app.get("/api/me", authenticateToken, async (req, res) => {
     try {
         const user = await dbGet(
             "SELECT id, name, email, role FROM students WHERE id = $1",
