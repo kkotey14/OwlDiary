@@ -11,6 +11,7 @@ import { jwtDecode } from "jwt-decode";
 import PostCard from "./PostCard";
 import CreateCommentModal from "./CreateCommentModal"; // Import the new modal
 import { getAuthTokenOrLogout, handleAuthFailure } from "../utils/auth";
+import EditPostModal from './EditPostModal';
 
 const FeedContainer = styled.div`
     display: flex;
@@ -27,6 +28,7 @@ const ActivityFeed = forwardRef(({ fetchStats, refreshTrigger }, ref) => {
         useState(null);
     const [viewer, setViewer] = useState({ id: null, isAdmin: false });
     const navigate = useNavigate();
+    const [editingPost, setEditingPost] = useState(null);
 
     const fetchPosts = useCallback(async () => {
         setLoading(true);
@@ -163,6 +165,8 @@ const ActivityFeed = forwardRef(({ fetchStats, refreshTrigger }, ref) => {
         }
     };
 
+    
+
     return (
         <FeedContainer>
             {(Array.isArray(posts) ? posts : []).map((post) => {
@@ -179,6 +183,9 @@ const ActivityFeed = forwardRef(({ fetchStats, refreshTrigger }, ref) => {
                         onCommentClick={handleOpenCommentModal} // Pass the handler
                         canHide={canHide}
                         onToggleVisibility={handleTogglePostVisibility}
+                        canEdit={isOwner}
+                        onEdit={(post) => setEditingPost(post)}
+                        showMoveButtons={false}
                     />
                 );
             })}
@@ -187,6 +194,16 @@ const ActivityFeed = forwardRef(({ fetchStats, refreshTrigger }, ref) => {
                     postId={selectedPostIdForComment}
                     onClose={handleCloseCommentModal}
                     onCommentPosted={handleCommentPosted}
+                />
+            )}
+            {editingPost && (
+                <EditPostModal
+                    post={editingPost}
+                    onClose={() => setEditingPost(null)}
+                    onPostUpdated={(updatedPost) => {
+                        setPosts((prev) => prev.map((p) => (p.id === updatedPost.id ? updatedPost : p)));
+                        setEditingPost(null);
+                    }}
                 />
             )}
         </FeedContainer>
