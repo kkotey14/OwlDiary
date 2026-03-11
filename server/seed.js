@@ -1,18 +1,15 @@
 import "dotenv/config";
-import pkg from "pg";
+import postgres from "postgres";
 import bcrypt from "bcrypt";
 
-const { Pool } = pkg;
-
-const db = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false },
+const sql = postgres(process.env.DATABASE_URL, {
+    ssl: "require",
 });
 
 async function seedDatabase() {
     try {
-        const row = await db.query("SELECT COUNT(*) AS count FROM students");
-        const count = parseInt(row.rows[0]?.count ?? 0);
+        const row = await sql`SELECT COUNT(*) AS count FROM students`;
+        const count = parseInt(row[0]?.count ?? 0);
 
         console.log("Current student count:", count);
         if (count !== 0) {
@@ -28,24 +25,28 @@ async function seedDatabase() {
                 name: "Admin User",
                 email: "admin@test.com",
                 password: "password123",
-                about: "I am the admin.",
-                avatar: "https://i.pravatar.cc/150?img=1",
+                about_me: "I am the admin.",
+                avatar_url: "https://i.pravatar.cc/150?img=1",
+                role: "admin",
+                approval_status: "approved"
             },
             {
                 name: "Mike Example",
                 email: "mike@example.com",
                 password: "password456",
-                about: "Just a regular user.",
-                avatar: "https://i.pravatar.cc/150?img=2",
+                about_me: "Just a regular user.",
+                avatar_url: "https://i.pravatar.cc/150?img=2",
+                role: "user",
+                approval_status: "approved"
             },
         ];
 
         for (const s of students) {
             const hashedPassword = await bcrypt.hash(s.password, saltRounds);
-            await db.query(
-                "INSERT INTO students (name, email, password, about_me, avatar_url) VALUES ($1, $2, $3, $4, $5)",
-                [s.name, s.email, hashedPassword, s.about, s.avatar],
-            );
+            await sql`
+                INSERT INTO students (name, email, password, about_me, avatar_url, role, approval_status) 
+                VALUES (${s.name}, ${s.email}, ${hashedPassword}, ${s.about_me}, ${s.avatar_url}, ${s.role}, ${s.approval_status})
+            `;
         }
 
         const posts = [
@@ -53,26 +54,26 @@ async function seedDatabase() {
                 student_id: 1,
                 title: "Admin Post",
                 content: "This is a post from the admin.",
-                type: "text",
+                post_type: "text",
             },
             {
                 student_id: 2,
                 title: "Mike's Musings",
                 content: "Hello world!",
-                type: "text",
+                post_type: "text",
             },
         ];
 
         for (const p of posts) {
-            await db.query(
-                "INSERT INTO posts (student_id, title, content, post_type) VALUES ($1, $2, $3, $4)",
-                [p.student_id, p.title, p.content, p.type],
-            );
+            await sql`
+                INSERT INTO posts (student_id, title, content, post_type) 
+                VALUES (${p.student_id}, ${p.title}, ${p.content}, ${p.post_type})
+            `;
         }
 
         // Seed starter quotes
-        const quotesRow = await db.query("SELECT COUNT(*) AS count FROM quotes");
-        if (parseInt(quotesRow.rows[0]?.count ?? 0) === 0) {
+        const quotesRow = await sql`SELECT COUNT(*) AS count FROM quotes`;
+        if (parseInt(quotesRow[0]?.count ?? 0) === 0) {
             const starterQuotes = [
                 { text: "The secret of getting ahead is getting started.", author: "Mark Twain" },
                 { text: "It always seems impossible until it is done.", author: "Nelson Mandela" },
@@ -81,19 +82,19 @@ async function seedDatabase() {
                 { text: "Start where you are. Use what you have. Do what you can.", author: "Arthur Ashe" },
             ];
             for (const q of starterQuotes) {
-                await db.query(
-                    "INSERT INTO quotes (text, author, is_manual) VALUES ($1, $2, 0)",
-                    [q.text, q.author],
-                );
+                await sql`
+                    INSERT INTO quotes (text, author, is_manual) 
+                    VALUES (${q.text}, ${q.author}, 0)
+                `;
             }
             console.log("Quotes seeded.");
         }
 
         console.log("Database seeded.");
     } catch (error) {
-        console.error("Error while seeding database", error.message);
+        console.error("Error while seeding database:", error.message);
     } finally {
-        await db.end();
+        await sql.end();
     }
 }
 

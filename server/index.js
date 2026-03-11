@@ -9,6 +9,7 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import multer from "multer";
 import postgres from "postgres";
+import { RequireAdmin } from "./middleware/RequireAdmin.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -37,8 +38,13 @@ const dbGet = async (query, params = []) => {
 };
 
 const dbAll = async (query, params = []) => {
-    const result = await executeQuery(query, params);
-    return Array.isArray(result) ? result : [];
+    try {
+        const result = await executeQuery(query, params);
+        return Array.isArray(result) ? result : [];
+    } catch (error) {
+        console.error("Error in dbAll:", error);
+        throw error;
+    }
 };
 
 const dbRun = async (query, params = []) => {
@@ -63,105 +69,115 @@ const createNotification = async (userId, message, linkUrl = null) => {
 };
 
 const initializeDatabase = async () => {
-    const schema = fs.readFileSync(SCHEMA_PATH, "utf8");
-    const cleanedSchema = schema
-        .split("\n")
-        .filter((line) => !line.trim().startsWith("--"))
-        .join("\n");
-    const statements = cleanedSchema
-        .split(/;\s*(?:\n|$)/g)
-        .map((statement) => statement.trim())
-        .filter(Boolean);
+    const originalLog = console.log;
+    console.log = () => {}; // silence logs
+    try {
+        const tableExists = await sql`
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables
+                WHERE table_name = 'students'
+            )
+        `;
 
-    for (const statement of statements) {
-        await sql.unsafe(statement);
+        if (!tableExists[0].exists) {
+            console.log("Initializing database schema...");
+
+            const schema = fs.readFileSync(SCHEMA_PATH, "utf8");
+
+            const cleanedSchema = schema
+                .split("\n")
+                .filter((line) => !line.trim().startsWith("--"))
+                .join("\n");
+
+            const statements = cleanedSchema
+                .split(/;\s*(?:\n|$)/g)
+                .map((statement) => statement.trim())
+                .filter(Boolean);
+
+            for (const statement of statements) {
+                await sql.unsafe(statement);
+            }
+
+            // Ensure compatibility with databases created before newer profile/gallery fields.
+            await sql.unsafe(
+                "ALTER TABLE students ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user'",
+            );
+            await sql.unsafe(
+                "ALTER TABLE students ADD COLUMN IF NOT EXISTS appearance_theme TEXT",
+            );
+            await sql.unsafe(
+                "ALTER TABLE students ADD COLUMN IF NOT EXISTS font_family TEXT",
+            );
+            await sql.unsafe(
+                "ALTER TABLE students ADD COLUMN IF NOT EXISTS accent_color TEXT",
+            );
+            await sql.unsafe(
+                "ALTER TABLE students ADD COLUMN IF NOT EXISTS font_size TEXT",
+            );
+            await sql.unsafe(
+                "ALTER TABLE students ADD COLUMN IF NOT EXISTS profile_background_url TEXT",
+            );
+            await sql.unsafe(
+                "ALTER TABLE posts ADD COLUMN IF NOT EXISTS is_hidden INTEGER DEFAULT 0",
+            );
+            await sql.unsafe(
+                "ALTER TABLE posts ADD COLUMN IF NOT EXISTS display_order INTEGER",
+            );
+            await sql.unsafe(
+                "ALTER TABLE posts ADD COLUMN IF NOT EXISTS post_font_family TEXT",
+            );
+
+            await sql.unsafe(
+                `CREATE TABLE IF NOT EXISTS comment_likes (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES students(id),
+                    comment_id INTEGER NOT NULL REFERENCES comments(id),
+                    UNIQUE(user_id, comment_id)
+                )`,
+            );
+            await sql.unsafe(
+                "ALTER TABLE comments ADD COLUMN IF NOT EXISTS likes INTEGER DEFAULT 0",
+            );
+
+            // index for performance
+            await sql.unsafe(
+                "CREATE INDEX IF NOT EXISTS idx_comment_likes_comment_user ON comment_likes (comment_id, user_id)",
+            );
+
+            // Indexes for common feed/profile/detail queries.
+            await sql.unsafe(
+                "CREATE INDEX IF NOT EXISTS idx_posts_visibility_created_at ON posts (is_hidden, created_at DESC)",
+            );
+            await sql.unsafe(
+                "CREATE INDEX IF NOT EXISTS idx_posts_student_order_created ON posts (student_id, display_order, created_at DESC)",
+            );
+            await sql.unsafe(
+                "CREATE INDEX IF NOT EXISTS idx_comments_post_created ON comments (post_id, created_at ASC)",
+            );
+            await sql.unsafe(
+                "CREATE INDEX IF NOT EXISTS idx_likes_post_user ON likes (post_id, user_id)",
+            );
+            await sql.unsafe(
+                "CREATE INDEX IF NOT EXISTS idx_gallery_student_created ON profile_gallery (student_id, created_at DESC)",
+            );
+        }
+    } finally {
+        console.log = originalLog;
     }
-
-    // Ensure compatibility with databases created before newer profile/gallery fields.
-    await sql.unsafe(
-        "ALTER TABLE students ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user'",
-    );
-    await sql.unsafe(
-        "ALTER TABLE students ADD COLUMN IF NOT EXISTS appearance_theme TEXT",
-    );
-    await sql.unsafe(
-        "ALTER TABLE students ADD COLUMN IF NOT EXISTS font_family TEXT",
-    );
-    await sql.unsafe(
-        "ALTER TABLE students ADD COLUMN IF NOT EXISTS accent_color TEXT",
-    );
-    await sql.unsafe(
-        "ALTER TABLE students ADD COLUMN IF NOT EXISTS font_size TEXT",
-    );
-    await sql.unsafe(
-        "ALTER TABLE students ADD COLUMN IF NOT EXISTS profile_background_url TEXT",
-    );
-    await sql.unsafe(
-        "ALTER TABLE posts ADD COLUMN IF NOT EXISTS is_hidden INTEGER DEFAULT 0",
-    );
-    await sql.unsafe(
-        "ALTER TABLE posts ADD COLUMN IF NOT EXISTS display_order INTEGER",
-    );
-    await sql.unsafe(
-        "ALTER TABLE posts ADD COLUMN IF NOT EXISTS post_font_family TEXT",
-    );
-    await sql.unsafe(
-        "ALTER TABLE profile_gallery ADD COLUMN IF NOT EXISTS title TEXT",
-    );
-    await sql.unsafe(
-        "ALTER TABLE profile_gallery ADD COLUMN IF NOT EXISTS description TEXT",
-    );
-    await sql.unsafe(
-        "ALTER TABLE profile_gallery ADD COLUMN IF NOT EXISTS display_order INTEGER",
-    );
-
-    // Comment likes table
-await sql.unsafe(
-    `CREATE TABLE IF NOT EXISTS comment_likes (
-        id SERIAL PRIMARY KEY,
-        user_id INTEGER NOT NULL REFERENCES students(id),
-        comment_id INTEGER NOT NULL REFERENCES comments(id),
-        UNIQUE(user_id, comment_id)
-    )`
-    );
-
-    // likes column on comments table
-    await sql.unsafe(
-        "ALTER TABLE comments ADD COLUMN IF NOT EXISTS likes INTEGER DEFAULT 0"
-    );
-
-    // index for performance
-    await sql.unsafe(
-        "CREATE INDEX IF NOT EXISTS idx_comment_likes_comment_user ON comment_likes (comment_id, user_id)"
-    );
-
-
-
-    // Indexes for common feed/profile/detail queries.
-    await sql.unsafe(
-        "CREATE INDEX IF NOT EXISTS idx_posts_visibility_created_at ON posts (is_hidden, created_at DESC)",
-    );
-    await sql.unsafe(
-        "CREATE INDEX IF NOT EXISTS idx_posts_student_order_created ON posts (student_id, display_order, created_at DESC)",
-    );
-    await sql.unsafe(
-        "CREATE INDEX IF NOT EXISTS idx_comments_post_created ON comments (post_id, created_at ASC)",
-    );
-    await sql.unsafe(
-        "CREATE INDEX IF NOT EXISTS idx_likes_post_user ON likes (post_id, user_id)",
-    );
-    await sql.unsafe(
-        "CREATE INDEX IF NOT EXISTS idx_gallery_student_created ON profile_gallery (student_id, created_at DESC)",
-    );
-    await sql.unsafe(
-        "CREATE INDEX IF NOT EXISTS idx_gallery_student_order_created ON profile_gallery (student_id, display_order, created_at DESC)",
-    );
 };
 
 app.use(cors());
 app.use(express.json());
 
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+app.get("/uploads/:filename", (req, res) => {
+    return res
+        .status(200)
+        .type("image/svg+xml")
+        .send(
+            `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><rect width="100%" height="100%" fill="#e5e7eb"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#64748b" font-family="Arial, sans-serif" font-size="24">Media unavailable</text></svg>`,
+        );
+});
 
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
@@ -251,24 +267,38 @@ const authenticateToken = (req, res, next) => {
 
 app.post("/api/signup", async (req, res) => {
     console.log("Signup request received");
-    const { name, email, password } = req.body;
+    // Added 'code' to the destructuring
+    const { name, email, password, code } = req.body;
 
-    if (!name || !email || !password) {
-        return res
-            .status(400)
-            .json({ error: "Please provide all required fields." });
+    if (!name || !email || !password || !code) {
+        return res.status(400).json({
+            error: "All fields including registration code are required.",
+        });
     }
 
     try {
+        // 1. Verify the registration code is active and correct
+        const validCode = await dbGet(sql`
+            SELECT * FROM registration_codes 
+            WHERE code = ${code.toUpperCase()} AND is_active = true
+        `);
+
+        if (!validCode) {
+            return res
+                .status(401)
+                .json({ error: "Invalid or expired registration code." });
+        }
+
+        // 2. Proceed with existing signup logic
         const hashedPassword = await bcrypt.hash(password, 10);
         const avatar_url = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`;
         const about_me = "New community member";
 
         await dbRun(sql`
-            INSERT INTO students (name, email, password, avatar_url, about_me)
-            VALUES (${name}, ${email}, ${hashedPassword}, ${avatar_url}, ${about_me})
-            RETURNING id
-        `);
+INSERT INTO students (name, email, password, avatar_url, about_me, approval_status)
+VALUES (${name}, ${email}, ${hashedPassword}, ${avatar_url}, ${about_me}, 'pending')
+RETURNING id
+`);
 
         return res.status(201).json({ message: "User created successfully." });
     } catch (error) {
@@ -302,6 +332,12 @@ app.post("/api/login", async (req, res) => {
 
         if (!user) {
             return res.status(401).json({ error: "User not found." });
+        }
+
+        if (user.approval_status !== "approved") {
+            return res.status(403).json({
+                error: "Your account is awaiting admin approval.",
+            });
         }
 
         const isMatch = await bcrypt.compare(password, user.password);
@@ -976,8 +1012,11 @@ app.get("/api/students", async (req, res) => {
     }
 });
 
-app.get("/api/students/:id", async (req, res) => {
+app.get("/api/students/:id", async (req, res, next) => {
     const { id } = req.params;
+    if (!/^\d+$/.test(String(id))) {
+        return next();
+    }
     try {
         const row = await dbGet("SELECT * FROM students WHERE id = $1", [id]);
         if (!row) {
@@ -1105,11 +1144,15 @@ app.put("/api/profile/gallery/reorder", authenticateToken, async (req, res) => {
         const ownedSet = new Set(owned.map((row) => Number(row.id)));
         const incomingSet = new Set(photoIds.map((id) => Number(id)));
         if (incomingSet.size !== ownedSet.size) {
-            return res.status(400).json({ error: "photoIds must include all gallery photos." });
+            return res
+                .status(400)
+                .json({ error: "photoIds must include all gallery photos." });
         }
         for (const id of incomingSet) {
             if (!ownedSet.has(id)) {
-                return res.status(403).json({ error: "Invalid gallery photo list." });
+                return res
+                    .status(403)
+                    .json({ error: "Invalid gallery photo list." });
             }
         }
 
@@ -1171,7 +1214,7 @@ app.get("/api/students/:id/posts", async (req, res) => {
         }
     }
     const isOwner = requesterId && String(requesterId) === String(id);
-    const sql = `
+    const querySql = `
         SELECT 
             p.id, p.title, p.content, p.post_type, p.likes, p.created_at, p.media_url,
             p.is_hidden, p.display_order, p.post_font_family,
@@ -1186,7 +1229,7 @@ app.get("/api/students/:id/posts", async (req, res) => {
                  p.created_at DESC
     `;
     try {
-        const rows = await dbAll(sql, [id]);
+        const rows = await dbAll(querySql, [id]);
         return res.json(rows);
     } catch (error) {
         return res.status(500).json({ error: error.message });
@@ -1200,15 +1243,26 @@ app.put("/api/comments/:id", authenticateToken, async (req, res) => {
     const userId = req.user.id;
 
     if (!content || !content.trim()) {
-        return res.status(400).json({ message: "Comment content is required." });
+        return res
+            .status(400)
+            .json({ message: "Comment content is required." });
     }
 
     try {
-        const existing = await dbGet("SELECT * FROM comments WHERE id = $1", [commentId]);
-        if (!existing) return res.status(404).json({ message: "Comment not found." });
-        if (existing.user_id !== userId) return res.status(403).json({ message: "Forbidden: You can only edit your own comments." });
+        const existing = await dbGet("SELECT * FROM comments WHERE id = $1", [
+            commentId,
+        ]);
+        if (!existing)
+            return res.status(404).json({ message: "Comment not found." });
+        if (existing.user_id !== userId)
+            return res.status(403).json({
+                message: "Forbidden: You can only edit your own comments.",
+            });
 
-        await dbRun("UPDATE comments SET content = $1 WHERE id = $2", [content.trim(), commentId]);
+        await dbRun("UPDATE comments SET content = $1 WHERE id = $2", [
+            content.trim(),
+            commentId,
+        ]);
 
         const updated = await dbGet(
             `SELECT c.id, c.content, c.created_at,
@@ -1216,7 +1270,7 @@ app.put("/api/comments/:id", authenticateToken, async (req, res) => {
             FROM comments c
             JOIN students s ON c.user_id = s.id
             WHERE c.id = $1`,
-            [commentId]
+            [commentId],
         );
 
         return res.json({ comment: updated });
@@ -1232,9 +1286,15 @@ app.delete("/api/comments/:id", authenticateToken, async (req, res) => {
     const userId = req.user.id;
 
     try {
-        const existing = await dbGet("SELECT * FROM comments WHERE id = $1", [commentId]);
-        if (!existing) return res.status(404).json({ message: "Comment not found." });
-        if (existing.user_id !== userId) return res.status(403).json({ message: "Forbidden: You can only delete your own comments." });
+        const existing = await dbGet("SELECT * FROM comments WHERE id = $1", [
+            commentId,
+        ]);
+        if (!existing)
+            return res.status(404).json({ message: "Comment not found." });
+        if (existing.user_id !== userId)
+            return res.status(403).json({
+                message: "Forbidden: You can only delete your own comments.",
+            });
 
         await dbRun("DELETE FROM comments WHERE id = $1", [commentId]);
 
@@ -1253,21 +1313,25 @@ app.post("/api/comments/:id/like", authenticateToken, async (req, res) => {
     try {
         const existingLike = await dbGet(
             "SELECT * FROM comment_likes WHERE user_id = $1 AND comment_id = $2",
-            [userId, commentId]
+            [userId, commentId],
         );
 
         if (existingLike) {
             await dbRun(
                 "DELETE FROM comment_likes WHERE user_id = $1 AND comment_id = $2",
-                [userId, commentId]
+                [userId, commentId],
             );
-            await dbRun("UPDATE comments SET likes = likes - 1 WHERE id = $1", [commentId]);
+            await dbRun("UPDATE comments SET likes = likes - 1 WHERE id = $1", [
+                commentId,
+            ]);
         } else {
             await dbRun(
                 "INSERT INTO comment_likes (user_id, comment_id) VALUES ($1, $2)",
-                [userId, commentId]
+                [userId, commentId],
             );
-            await dbRun("UPDATE comments SET likes = likes + 1 WHERE id = $1", [commentId]);
+            await dbRun("UPDATE comments SET likes = likes + 1 WHERE id = $1", [
+                commentId,
+            ]);
         }
 
         const updatedComment = await dbGet(
@@ -1280,7 +1344,7 @@ app.post("/api/comments/:id/like", authenticateToken, async (req, res) => {
             FROM comments c
             JOIN students s ON c.user_id = s.id
             WHERE c.id = $2`,
-            [userId, commentId]
+            [userId, commentId],
         );
 
         if (!updatedComment) {
@@ -1290,7 +1354,220 @@ app.post("/api/comments/:id/like", authenticateToken, async (req, res) => {
         return res.json(updatedComment);
     } catch (error) {
         console.error("Error toggling comment like:", error);
-        return res.status(500).json({ message: "Error toggling comment like." });
+        return res
+            .status(500)
+            .json({ message: "Error toggling comment like." });
+    }
+});
+
+//create admine route
+app.post(
+    "/api/create-admin",
+    authenticateToken,
+    RequireAdmin,
+    async (req, res) => {
+        const { name, email, password } = req.body;
+
+        try {
+            const hashedPassword = await bcrypt.hash(password, 10);
+            const avatar_url = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`;
+            const about_me = "Admin account";
+
+            await dbRun(sql`
+            INSERT INTO students (name, email, password, avatar_url, about_me, role)
+            VALUES (${name}, ${email}, ${hashedPassword}, ${avatar_url}, ${about_me}, 'admin')
+        `);
+
+            res.json({ message: "Admin created" });
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ error: "Failed to create admin" });
+        }
+    },
+);
+// make codes
+app.post(
+    "/api/generate-registration-code",
+    authenticateToken,
+    RequireAdmin,
+    async (req, res) => {
+        const { code, semester } = req.body;
+
+        if (!code || !semester) {
+            return res
+                .status(400)
+                .json({ error: "Code and semester are required." });
+        }
+
+        try {
+            // Use a transaction to ensure we only have one active code at a time
+            await sql.begin(async (tx) => {
+                // 1. Deactivate all previous codes
+                await tx`UPDATE registration_codes SET is_active = false WHERE is_active = true`;
+
+                // 2. Insert the new code
+                await tx`
+                INSERT INTO registration_codes (code, semester, is_active)
+                VALUES (${code.toUpperCase()}, ${semester}, true)
+            `;
+            });
+
+            return res.status(201).json({
+                message: "Registration code generated and activated.",
+            });
+        } catch (error) {
+            console.error("Error generating registration code:", error);
+            return res
+                .status(500)
+                .json({ error: "Failed to generate registration code." });
+        }
+    },
+);
+
+// get codes
+app.get(
+    "/api/registration-codes",
+    authenticateToken,
+    RequireAdmin,
+    async (req, res) => {
+        try {
+            const codes = await dbAll(sql`
+            SELECT code_id, code, semester, is_active, created_at 
+            FROM registration_codes 
+            ORDER BY created_at DESC
+        `);
+            return res.json(codes);
+        } catch (error) {
+            console.error("Error fetching codes:", error);
+            return res.status(500).json({ error: "Failed to fetch codes." });
+        }
+    },
+);
+
+// validate codes
+app.get("/api/validate-code/:code", async (req, res) => {
+    try {
+        const { code } = req.params;
+        const validCode = await dbGet(sql`
+            SELECT * FROM registration_codes 
+            WHERE code = ${code.toUpperCase()} AND is_active = true
+        `);
+
+        return res.json({ isValid: !!validCode });
+    } catch (error) {
+        console.error("Error validating code:", error);
+        return res.status(500).json({ error: "Validation error" });
+    }
+});
+
+// student approval routes
+app.get(
+    "/api/students/pending",
+    authenticateToken,
+    RequireAdmin,
+    async (req, res) => {
+        try {
+            const page = parseInt(req.query.page) || 1;
+            const limit = parseInt(req.query.limit) || 10;
+            const offset = (page - 1) * limit;
+
+            const students = await dbAll(
+                `SELECT id, name, email
+                 FROM students
+                 WHERE approval_status = 'pending'
+                 LIMIT $1 OFFSET $2`,
+                [limit, offset],
+            ).catch(async (error) => {
+                const message = String(error?.message || "");
+                if (message.includes("approval_status")) {
+                    console.warn(
+                        "approval_status column unavailable; returning empty pending list.",
+                    );
+                    return [];
+                }
+                throw error;
+            });
+
+            return res.json(Array.isArray(students) ? students : []);
+        } catch (error) {
+            console.log("Caught error in /api/students/pending:", error);
+            console.error("Error fetching pending students:", error);
+
+            return res.status(200).json([]);
+        }
+    },
+);
+
+app.post(
+    "/api/students/:id/approve",
+    authenticateToken,
+    RequireAdmin,
+    async (req, res) => {
+        const { id } = req.params;
+
+        try {
+            await dbRun(
+                "UPDATE students SET approval_status = $1 WHERE id = $2",
+                ["approved", id],
+            );
+
+            res.json({ message: "Student approved." });
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ error: "Failed to approve student." });
+        }
+    },
+);
+
+app.post(
+    "/api/students/:id/deny",
+    authenticateToken,
+    RequireAdmin,
+    async (req, res) => {
+        const { id } = req.params;
+
+        try {
+            await dbRun("DELETE FROM students WHERE id = $1", [id]);
+
+            res.json({ message: "Student denied and deleted." });
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ error: "Failed to delete student." });
+        }
+    },
+);
+
+app.post(
+    "/api/students/approve-all",
+    authenticateToken,
+    RequireAdmin,
+    async (req, res) => {
+        try {
+            await dbRun(
+                "UPDATE students SET approval_status = $1 WHERE approval_status = $2",
+                ["approved", "pending"],
+            );
+
+            res.json({ message: "All pending students approved." });
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ error: "Failed to approve students." });
+        }
+    },
+);
+
+//api/me
+app.get("/api/me", authenticateToken, async (req, res) => {
+    try {
+        const user = await dbGet(
+            "SELECT id, name, email, role FROM students WHERE id = $1",
+            [req.user.id],
+        );
+
+        res.json(user);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Failed to fetch user." });
     }
 });
 

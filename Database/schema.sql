@@ -12,7 +12,8 @@ CREATE TABLE IF NOT EXISTS students (
     accent_color TEXT,
     font_size TEXT,
     profile_background_url TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    approval_status TEXT DEFAULT 'pending'
 );
 
 -- Create the posts table
@@ -85,4 +86,12 @@ CREATE TABLE IF NOT EXISTS quotes (
     is_manual INTEGER DEFAULT 0,
     created_by INTEGER REFERENCES students(id) ON DELETE SET NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS registration_codes (
+    code_id SERIAL PRIMARY KEY,
+    code VARCHAR(5) NOT NULL UNIQUE,
+    semester TEXT NOT NULL,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

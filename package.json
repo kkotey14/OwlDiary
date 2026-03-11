@@ -6,6 +6,8 @@
     "scripts": {
         "dev": "concurrently \"vite\" \"nodemon server/index.js\"",
         "dev:host": "concurrently \"vite --host\" \"nodemon server/index.js\"",
+        "server": "nodemon server/index.js",
+        "client": "vite",
         "build": "vite build",
         "start": "NODE_ENV=production node server/index.js",
         "prod": "npm run build && npm start",

@@ -1,7 +1,17 @@
-import React from "react";
+import React, { useEffect } from "react";
 import styled from "styled-components";
-import { FiDownload, FiExternalLink, FiShield, FiDatabase } from "react-icons/fi";
+import { useNavigate } from "react-router-dom";
+import {
+    FiDownload,
+    FiExternalLink,
+    FiShield,
+    FiDatabase,
+    FiList,
+} from "react-icons/fi";
 import { exportUserData } from "../utils/FetchData.js";
+import { getAuthTokenOrLogout } from "../utils/auth";
+import RegistrationCodeManager from "../components/RegistrationCodeManager.jsx";
+import StudentAcceptanceModal from "../components/StudentAcceptanceModal.jsx";
 
 const SettingsPage = styled.div`
     margin: -2.5rem;
@@ -97,7 +107,9 @@ const ActionButton = styled.button`
     font-size: 0.95rem;
     font-weight: 600;
     cursor: pointer;
-    transition: background-color 0.18s ease, opacity 0.18s ease;
+    transition:
+        background-color 0.18s ease,
+        opacity 0.18s ease;
 
     &:hover {
         background: #1d4ed8;
@@ -169,8 +181,59 @@ const ModalPrimaryButton = styled(ActionButton)`
 `;
 
 const Settings = () => {
+    const navigate = useNavigate();
+    const [loading, setLoading] = React.useState(true);
     const [exporting, setExporting] = React.useState(false);
     const [dialog, setDialog] = React.useState(null);
+    const [user, setUser] = React.useState(null);
+    const [showManageModal, setShowManageModal] = React.useState(false);
+    const [showStudentModal, setShowStudentModal] = React.useState(false);
+    const [pendingCount, setPendingCount] = React.useState(0);
+
+    useEffect(() => {
+        const loadSettingsData = async () => {
+            const token = getAuthTokenOrLogout(navigate);
+            if (!token) return;
+
+            try {
+                // Fetch user data
+                const meRes = await fetch("/api/me", {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+
+                if (meRes.ok) {
+                    const me = await meRes.json();
+                    setUser(me);
+
+                    // If admin, fetch pending count
+                    if (me.role === "admin") {
+                        const pendingRes = await fetch(
+                            "/api/students/pending",
+                            {
+                                headers: { Authorization: `Bearer ${token}` },
+                            },
+                        );
+                        if (pendingRes.ok) {
+                            const pendingData = await pendingRes.json();
+                            setPendingCount(
+                                Array.isArray(pendingData)
+                                    ? pendingData.length
+                                    : 0,
+                            );
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error("Error loading settings data:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        loadSettingsData();
+    }, [navigate]);
+
+    const isAdmin = user?.role === "admin";
 
     const closeDialog = () => setDialog(null);
 
@@ -180,8 +243,7 @@ const Settings = () => {
     const handleExportData = async () => {
         setDialog({
             title: "Export Data?",
-            message:
-                `This will download your posts and comments as a JSON file.\n\n${dataSafetyMessage}`,
+            message: `This will download your posts and comments as a JSON file.\n\n${dataSafetyMessage}`,
             confirmLabel: "Continue Export",
             onConfirm: async () => {
                 closeDialog();
@@ -195,8 +257,7 @@ const Settings = () => {
     const handleAccountSettings = () => {
         setDialog({
             title: "Open Account Portal?",
-            message:
-                `This opens the SCSU account settings page in a new tab.\n\n${dataSafetyMessage}`,
+            message: `This opens the SCSU account settings page in a new tab.`,
             confirmLabel: "Open Portal",
             onConfirm: () => {
                 closeDialog();
@@ -225,12 +286,116 @@ const Settings = () => {
         });
     };
 
+    const adminCreationButton = async () => {
+        const email = prompt("New admin email:");
+        const password = prompt("New admin password:");
+        const name = prompt("Admin name (optional):");
+
+        if (!email || !password) {
+            alert("Email and password are required.");
+            return;
+        }
+
+        const token = getAuthTokenOrLogout(navigate);
+
+        try {
+            const res = await fetch("/api/create-admin", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({ email, password, name }),
+            });
+
+            const data = await res.json();
+
+            if (res.ok) {
+                alert("Admin created successfully");
+            } else {
+                alert(data.error || "Failed to create admin");
+            }
+        } catch (error) {
+            console.error("Admin creation failed:", error);
+        }
+    };
+
+    const generateRandomCode = () => {
+        const characters = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // Excluded confusing chars like 0, O, 1, I
+        let result = "";
+        for (let i = 0; i < 5; i++) {
+            result += characters.charAt(
+                Math.floor(Math.random() * characters.length),
+            );
+        }
+        return result;
+    };
+
+    const refreshPendingCount = async () => {
+        const token = getAuthTokenOrLogout(navigate);
+        if (!token) return;
+
+        try {
+            const res = await fetch("/api/students/pending", {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                setPendingCount(Array.isArray(data) ? data.length : 0);
+            }
+        } catch (error) {
+            console.error("Error refreshing pending count:", error);
+        }
+    };
+
+    const handleGenerateCode = async () => {
+        const semester = prompt("Enter the semester (e.g., Fall 2026):");
+        if (!semester) return;
+
+        const newCode = generateRandomCode();
+        const token = getAuthTokenOrLogout(navigate);
+
+        try {
+            const res = await fetch("/api/generate-registration-code", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                    code: newCode,
+                    semester: semester,
+                }),
+            });
+
+            if (res.ok) {
+                setDialog({
+                    title: "Code Generated!",
+                    message: `New code for ${semester}: ${newCode}\n\nStudents can now use this to register.`,
+                    confirmLabel: "Done",
+                    onConfirm: closeDialog,
+                    cancelLabel: null,
+                });
+            } else {
+                alert("Failed to save code to database.");
+            }
+        } catch (error) {
+            console.error("Error generating code:", error);
+        }
+    };
+
+    if (loading) {
+        return <div>Loading settings...</div>;
+    }
+
     return (
         <SettingsPage>
             <SettingsHeader>
                 <PageTitle>Settings</PageTitle>
                 <Subtitle>
-                    Manage your account tools, export your data, and open organization-level account controls.
+                    Manage your account tools, export your data, and open
+                    organization-level account controls.
                 </Subtitle>
             </SettingsHeader>
 
@@ -243,7 +408,8 @@ const Settings = () => {
                         <CardTitle>Data Export</CardTitle>
                     </CardHeader>
                     <CardDescription>
-                        Download your posts, comments, and profile metadata as a JSON snapshot for backup or transfer.
+                        Download your posts, comments, and profile metadata as a
+                        JSON snapshot for backup or transfer.
                     </CardDescription>
                     <ActionButton
                         onClick={handleExportData}
@@ -262,7 +428,8 @@ const Settings = () => {
                         <CardTitle>Account Portal</CardTitle>
                     </CardHeader>
                     <CardDescription>
-                        Open your organization account center to update security settings, sign-in methods, and profile controls.
+                        Open your organization account center to update security
+                        settings, sign-in methods, and profile controls.
                     </CardDescription>
                     <ActionButton
                         onClick={handleAccountSettings}
@@ -271,6 +438,80 @@ const Settings = () => {
                         Account Settings
                     </ActionButton>
                 </SettingCard>
+
+                {isAdmin && (
+                    <SettingCard>
+                        <CardHeader>
+                            <IconBadge>
+                                <FiShield size={17} />
+                            </IconBadge>
+                            <CardTitle>Admin Creation</CardTitle>
+                        </CardHeader>
+
+                        <CardDescription>
+                            Create additional administrators for the platform.
+                        </CardDescription>
+
+                        <ActionButton onClick={adminCreationButton}>
+                            Create Admin
+                        </ActionButton>
+                    </SettingCard>
+                )}
+                {isAdmin && (
+                    <SettingCard>
+                        <CardHeader>
+                            <IconBadge>
+                                <FiDatabase size={17} />
+                            </IconBadge>
+                            <CardTitle>Registration Management</CardTitle>
+                        </CardHeader>
+                        <CardDescription>
+                            Generate a random 5-character code or view history
+                            for student registration.
+                        </CardDescription>
+
+                        {/* New Flex container for buttons */}
+                        <div style={{ display: "flex", gap: "0.75rem" }}>
+                            <ActionButton onClick={handleGenerateCode}>
+                                Generate New Code
+                            </ActionButton>
+                            <SecondaryButton
+                                onClick={() => setShowManageModal(true)}
+                                style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "0.5rem",
+                                }}>
+                                <FiList size={16} />
+                                Manage Codes
+                            </SecondaryButton>
+                            <SecondaryButton
+                                onClick={() => setShowStudentModal(true)}
+                                style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "0.5rem",
+                                }}>
+                                <FiList size={16} />
+                                Manage Students{" "}
+                                {pendingCount > 0 && `(${pendingCount})`}
+                            </SecondaryButton>
+                        </div>
+                    </SettingCard>
+                )}
+
+                {/* Manage Codes Modal Component */}
+                {showManageModal && (
+                    <RegistrationCodeManager
+                        onClose={() => setShowManageModal(false)}
+                    />
+                )}
+                {showStudentModal && (
+                    <StudentAcceptanceModal
+                        onClose={() => setShowStudentModal(false)}
+                        refreshPendingCount={refreshPendingCount}
+                    />
+                )}
             </SettingsGrid>
             {dialog && (
                 <ModalOverlay onClick={closeDialog}>
@@ -279,7 +520,9 @@ const Settings = () => {
                         <ModalMessage>{dialog.message}</ModalMessage>
                         <ModalActions>
                             {dialog.cancelLabel !== null && (
-                                <SecondaryButton onClick={closeDialog}>Cancel</SecondaryButton>
+                                <SecondaryButton onClick={closeDialog}>
+                                    Cancel
+                                </SecondaryButton>
                             )}
                             <ModalPrimaryButton onClick={dialog.onConfirm}>
                                 {dialog.confirmLabel || "Continue"}
