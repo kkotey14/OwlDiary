@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import styled from "styled-components";
 import { Link, useNavigate } from "react-router-dom";
 import { FiEye, FiEyeOff } from "react-icons/fi";
+import { SendStudentACKEmail, SendAdminACKEmail } from "../utils/email.js";
 
 const PasswordInputContainer = styled.div`
     position: relative;
@@ -337,7 +338,15 @@ const SignUpPage = () => {
 
             if (!response.ok)
                 throw new Error(data.error || "Failed to sign up");
-
+            try {
+                await SendStudentACKEmail(name, email);
+                await SendAdminACKEmail(name);
+                console.log(
+                    `Acknowledgment emails sent to ${email} and admin.`,
+                );
+            } catch (emailError) {
+                console.error("Email sending failed:", emailError);
+            }
             setShowSuccessPopup(true);
         } catch (err) {
             setError(err.message);
@@ -437,7 +446,9 @@ const SignUpPage = () => {
                     <SuccessModal>
                         <SuccessTitle>Account Created</SuccessTitle>
                         <SuccessText>
-                            Your account was created successfully.
+                            Your account request has been submitted and is
+                            awaiting approval. You will receive an email once it
+                            is reviewed.{" "}
                         </SuccessText>
                         <SuccessButton
                             type="button"

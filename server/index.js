@@ -267,7 +267,6 @@ const authenticateToken = (req, res, next) => {
 
 app.post("/api/signup", async (req, res) => {
     console.log("Signup request received");
-    // Added 'code' to the destructuring
     const { name, email, password, code } = req.body;
 
     if (!name || !email || !password || !code) {
@@ -277,7 +276,6 @@ app.post("/api/signup", async (req, res) => {
     }
 
     try {
-        // 1. Verify the registration code is active and correct
         const validCode = await dbGet(sql`
             SELECT * FROM registration_codes 
             WHERE code = ${code.toUpperCase()} AND is_active = true
@@ -289,7 +287,6 @@ app.post("/api/signup", async (req, res) => {
                 .json({ error: "Invalid or expired registration code." });
         }
 
-        // 2. Proceed with existing signup logic
         const hashedPassword = await bcrypt.hash(password, 10);
         const avatar_url = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`;
         const about_me = "New community member";

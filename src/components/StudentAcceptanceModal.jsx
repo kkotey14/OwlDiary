@@ -3,6 +3,7 @@ import styled from "styled-components";
 import { useNavigate } from "react-router-dom";
 import { FiX } from "react-icons/fi";
 import { getAuthTokenOrLogout } from "../utils/auth";
+import { SendApprovalEmail, SendRejectionEmail } from "@/utils/email";
 
 const ModalOverlay = styled.div`
     position: fixed;
@@ -201,7 +202,7 @@ const StudentAcceptanceModal = ({ onClose, refreshPendingCount }) => {
         loadPendingStudents();
     }, [navigate, page]);
 
-    const approveStudent = async (id) => {
+    const approveStudent = async (id, name, email) => {
         const token = getAuthTokenOrLogout(navigate);
         if (!token) return;
         setBusyId(id);
@@ -215,6 +216,12 @@ const StudentAcceptanceModal = ({ onClose, refreshPendingCount }) => {
             setBusyId(null);
             return;
         }
+        try {
+            await SendApprovalEmail(name, email);
+            console.log(`Approval email sent to ${email}`);
+        } catch (err) {
+            console.error("Approval email failed:", err);
+        }
         refreshPendingCount();
 
         const updated = students.filter((s) => s.id !== id);
@@ -227,7 +234,7 @@ const StudentAcceptanceModal = ({ onClose, refreshPendingCount }) => {
         setBusyId(null);
     };
 
-    const denyStudent = async (id) => {
+    const denyStudent = async (id, name, email) => {
         const token = getAuthTokenOrLogout(navigate);
         if (!token) return;
         setBusyId(id);
@@ -241,6 +248,13 @@ const StudentAcceptanceModal = ({ onClose, refreshPendingCount }) => {
             setBusyId(null);
             return;
         }
+        try {
+            await SendRejectionEmail(name, email);
+            console.log(`Rejection email sent to ${email}`);
+        } catch (err) {
+            console.error("Rejection email failed:", err);
+        }
+
         refreshPendingCount();
 
         const updated = students.filter((s) => s.id !== id);
@@ -321,7 +335,11 @@ const StudentAcceptanceModal = ({ onClose, refreshPendingCount }) => {
                                         <ActionBtn
                                             disabled={busyId === student.id}
                                             onClick={() =>
-                                                approveStudent(student.id)
+                                                approveStudent(
+                                                    student.id,
+                                                    student.name,
+                                                    student.email,
+                                                )
                                             }>
                                             Approve
                                         </ActionBtn>
@@ -330,7 +348,11 @@ const StudentAcceptanceModal = ({ onClose, refreshPendingCount }) => {
                                             $kind="danger"
                                             disabled={busyId === student.id}
                                             onClick={() =>
-                                                denyStudent(student.id)
+                                                denyStudent(
+                                                    student.id,
+                                                    student.name,
+                                                    student.email,
+                                                )
                                             }>
                                             Deny
                                         </ActionBtn>
