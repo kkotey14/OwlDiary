@@ -267,7 +267,7 @@ const StudentAcceptanceModal = ({ onClose, refreshPendingCount }) => {
         setBusyId(null);
     };
 
-    const approveAll = async () => {
+    const approveAll = async (name, email) => {
         const token = getAuthTokenOrLogout(navigate);
         if (!token) return;
         setBusyAll(true);
@@ -279,6 +279,17 @@ const StudentAcceptanceModal = ({ onClose, refreshPendingCount }) => {
             });
 
             if (!res.ok) return;
+
+            for (const student of students) {
+                try {
+                    await SendApprovalEmail(student.name, student.email);
+                } catch (err) {
+                    console.error(
+                        "Failed to send approval email to:",
+                        student.email,
+                    );
+                }
+            }
 
             setStudents([]);
 
