@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import styled from 'styled-components';
 import { Link, useNavigate } from 'react-router-dom';
 import { FiEye, FiEyeOff } from 'react-icons/fi'; // Import eye icons
+import Lottie from 'lottie-react';
+import owlsAnimation from '../assets/owls-animation.json';
 
 const Input = styled.input`
   padding: 1rem 1.25rem;
@@ -71,6 +73,12 @@ const FeaturedQuote = styled.blockquote`
   line-height: 1.5;
 `;
 
+const AnimationWrap = styled.div`
+  width: min(420px, 82vw);
+  margin-bottom: -1.8rem;
+  filter: drop-shadow(0 14px 30px rgba(15, 23, 42, 0.14));
+`;
+
 const EditorialSection = styled.div`
   flex: 1.5;
   display: flex;
@@ -79,6 +87,7 @@ const EditorialSection = styled.div`
   align-items: flex-start;
   padding-left: 10%;
   position: relative;
+  transform: translateY(-5rem);
   z-index: 2;
 `;
 
@@ -88,7 +97,7 @@ const WelcomeMessage = styled.h1`
   font-weight: 700;
   line-height: 1.1;
   color: #0f172a;
-  margin-left: 0;
+  margin: 0;
 
   span {
     font-size: 7rem;
@@ -216,8 +225,11 @@ const LoginPage = () => {
   return (
     <PageWrapper>
       <EditorialSection>
+        <AnimationWrap aria-hidden="true">
+          <Lottie animationData={owlsAnimation} loop={true} autoplay={true} />
+        </AnimationWrap>
         <WelcomeMessage>
-          <span>W</span>elcome <span>B</span>ack
+          <span>O</span>wl <span>D</span>iary
         </WelcomeMessage>
         <FeaturedQuote>
           "Fill your paper with the breathings of your heart." — William Wordsworth

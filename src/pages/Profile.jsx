@@ -592,6 +592,15 @@ const Profile = () => {
       accent: '#38bdf8',
       accentDark: '#0ea5e9',
     },
+    rainbow: {
+      label: 'Rainbow',
+      bg: 'linear-gradient(135deg, #ff6b6b 0%, #f59e0b 18%, #facc15 34%, #4ade80 50%, #38bdf8 68%, #818cf8 84%, #f472b6 100%)',
+      card: 'rgba(255, 255, 255, 0.92)',
+      text: '#3b0764',
+      muted: '#7c3aed',
+      accent: '#db2777',
+      accentDark: '#a21caf',
+    },
   };
 
   const fontOptions = {
