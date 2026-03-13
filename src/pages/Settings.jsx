@@ -12,6 +12,8 @@ import { exportUserData } from "../utils/FetchData.js";
 import { getAuthTokenOrLogout } from "../utils/auth";
 import RegistrationCodeManager from "../components/RegistrationCodeManager.jsx";
 import StudentAcceptanceModal from "../components/StudentAcceptanceModal.jsx";
+import BrandedLoader from "../components/BrandedLoader.jsx";
+import useMinimumLoadingDelay from "../hooks/useMinimumLoadingDelay";
 
 const SettingsPage = styled.div`
     margin: -2.5rem;
@@ -189,6 +191,7 @@ const Settings = () => {
     const [showManageModal, setShowManageModal] = React.useState(false);
     const [showStudentModal, setShowStudentModal] = React.useState(false);
     const [pendingCount, setPendingCount] = React.useState(0);
+    const showLoader = useMinimumLoadingDelay(loading, 500);
 
     useEffect(() => {
         const loadSettingsData = async () => {
@@ -385,8 +388,8 @@ const Settings = () => {
         }
     };
 
-    if (loading) {
-        return <div>Loading settings...</div>;
+    if (showLoader) {
+        return <BrandedLoader message="Loading settings..." minHeight="60vh" />;
     }
 
     return (

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import styled from 'styled-components';
 import { FiHeart, FiMessageSquare, FiArrowLeft, FiEdit2, FiTrash2 } from 'react-icons/fi';
@@ -6,6 +6,8 @@ import { resolveMediaUrl } from '../utils/media';
 import { getAuthTokenOrLogout, handleAuthFailure } from '../utils/auth';
 import { jwtDecode } from 'jwt-decode';
 import DOMPurify from 'dompurify';
+import BrandedLoader from '../components/BrandedLoader';
+import useMinimumLoadingDelay from '../hooks/useMinimumLoadingDelay';
 
 
 // ─── Styled Components ────────────────────────────────────────────────────────
@@ -148,6 +150,11 @@ const EngagementBtn = styled.button`
 
   &:hover {
     color: var(--primary-teal);
+  }
+
+  &:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
   }
 `;
 
@@ -407,10 +414,16 @@ const PostPage = () => {
   const [error, setError] = useState(null);
   const [isLiked, setIsLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
+  const [isPostLikePending, setIsPostLikePending] = useState(false);
+  const [commentLikePending, setCommentLikePending] = useState({});
+  const postLikeLockRef = useRef(false);
+  const commentLikeLocksRef = useRef({});
   const [commentText, setCommentText] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [commentError, setCommentError] = useState('');
   const [activeCommentId, setActiveCommentId] = useState(null);
+  const showPostLoader = useMinimumLoadingDelay(postLoading, 500);
+  const showCommentsLoader = useMinimumLoadingDelay(commentsLoading, 500);
 
   const [editingCommentId, setEditingCommentId] = useState(null);
   const [editingText, setEditingText] = useState('');
@@ -528,9 +541,19 @@ const PostPage = () => {
     }
   };
   const handleLike = async () => {
+    if (postLikeLockRef.current || isPostLikePending) return;
     const token = getAuthTokenOrLogout(navigate);
     if (!token) return;
 
+    const previousLiked = isLiked;
+    const previousLikeCount = likeCount;
+    const nextLiked = !previousLiked;
+    const nextLikeCount = Math.max(0, previousLikeCount + (nextLiked ? 1 : -1));
+
+    postLikeLockRef.current = true;
+    setIsPostLikePending(true);
+    setIsLiked(nextLiked);
+    setLikeCount(nextLikeCount);
 
     try {
       const res = await fetch(`/api/posts/${postId}/like`, {
@@ -543,7 +566,13 @@ const PostPage = () => {
 
 
       if (!res.ok) {
-        if (handleAuthFailure(res.status, navigate)) return;
+        if (handleAuthFailure(res.status, navigate)) {
+          setIsLiked(previousLiked);
+          setLikeCount(previousLikeCount);
+          return;
+        }
+        setIsLiked(previousLiked);
+        setLikeCount(previousLikeCount);
         return;
       }
 
@@ -552,7 +581,12 @@ const PostPage = () => {
       setIsLiked(!!updated.isLiked);
       setLikeCount(updated.likes);
     } catch (err) {
+      setIsLiked(previousLiked);
+      setLikeCount(previousLikeCount);
       console.error('Error toggling like:', err);
+    } finally {
+      postLikeLockRef.current = false;
+      setIsPostLikePending(false);
     }
   };
 
@@ -596,8 +630,23 @@ const PostPage = () => {
   };
 
   const handleCommentLike = async (commentId) => {
+    if (commentLikeLocksRef.current[commentId] || commentLikePending[commentId]) return;
     const token = getAuthTokenOrLogout(navigate);
     if (!token) return;
+
+    const targetComment = comments.find((c) => c.id === commentId);
+    if (!targetComment) return;
+
+    const previousLiked = targetComment.isLiked === 1;
+    const previousLikes = targetComment.likes || 0;
+    const nextLiked = !previousLiked;
+    const nextLikes = Math.max(0, previousLikes + (nextLiked ? 1 : -1));
+
+    commentLikeLocksRef.current[commentId] = true;
+    setCommentLikePending((prev) => ({ ...prev, [commentId]: true }));
+    setComments((prev) =>
+      prev.map((c) => (c.id === commentId ? { ...c, likes: nextLikes, isLiked: nextLiked ? 1 : 0 } : c))
+    );
 
     try {
         const res = await fetch(`/api/comments/${commentId}/like`, {
@@ -607,13 +656,28 @@ const PostPage = () => {
                 Authorization: `Bearer ${token}`,
             },
         });
-        if (!res.ok) return;
+        if (!res.ok) {
+            setComments((prev) =>
+                prev.map((c) => (c.id === commentId ? { ...c, likes: previousLikes, isLiked: previousLiked ? 1 : 0 } : c))
+            );
+            return;
+        }
         const updated = await res.json();
         setComments((prev) =>
             prev.map((c) => (c.id === commentId ? { ...c, likes: updated.likes, isLiked: updated.isLiked } : c))
         );
     } catch (err) {
+        setComments((prev) =>
+            prev.map((c) => (c.id === commentId ? { ...c, likes: previousLikes, isLiked: previousLiked ? 1 : 0 } : c))
+        );
         console.error('Error liking comment:', err);
+    } finally {
+        delete commentLikeLocksRef.current[commentId];
+        setCommentLikePending((prev) => {
+            const next = { ...prev };
+            delete next[commentId];
+            return next;
+        });
     }
   };
 
@@ -666,7 +730,7 @@ const handleDeleteComment = async (commentId) => {
   
 
 
-  if (postLoading) return <p>Loading post...</p>;
+  if (showPostLoader) return <BrandedLoader message="Loading post..." minHeight="100vh" />;
   if (error) return <p>Error: {error}</p>;
   if (!post) return <p>Post not found.</p>;
 
@@ -723,7 +787,7 @@ const handleDeleteComment = async (commentId) => {
 
 
         <EngagementBar>
-          <EngagementBtn $active={isLiked} onClick={handleLike}>
+          <EngagementBtn $active={isLiked} onClick={handleLike} disabled={isPostLikePending}>
             <FiHeart />
             <span>{likeCount}</span>
           </EngagementBtn>
@@ -739,13 +803,17 @@ const handleDeleteComment = async (commentId) => {
         <SectionTitle>Comments ({comments.length})</SectionTitle>
 
 
-        {commentsLoading && <EmptyComments>Loading comments...</EmptyComments>}
+        {showCommentsLoader && (
+          <EmptyComments as="div">
+            <BrandedLoader message="Loading comments..." minHeight="180px" size="64px" />
+          </EmptyComments>
+        )}
 
-        {!commentsLoading && comments.length === 0 && (
+        {!showCommentsLoader && comments.length === 0 && (
           <EmptyComments>No comments yet. Be the first!</EmptyComments>
         )}
 
-        {!commentsLoading && comments.map((comment) => (
+        {!showCommentsLoader && comments.map((comment) => (
           <CommentItem
             key={comment.id}
             id={`comment-${comment.id}`}
@@ -776,6 +844,7 @@ const handleDeleteComment = async (commentId) => {
                 <EngagementBtn
                   $active={comment.isLiked === 1}
                   onClick={() => handleCommentLike(comment.id)}
+                  disabled={!!commentLikePending[comment.id]}
                   style={{ fontSize: '0.8rem' }}
                 >
                   <FiHeart />

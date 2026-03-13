@@ -4,6 +4,8 @@ import { jwtDecode } from 'jwt-decode';
 import { useNavigate } from 'react-router-dom';
 import { getAuthTokenOrLogout, handleAuthFailure } from '../utils/auth';
 import { resolveMediaUrl } from '../utils/media';
+import BrandedLoader from './BrandedLoader';
+import useMinimumLoadingDelay from '../hooks/useMinimumLoadingDelay';
 
 const StatsContainer = styled.div`
   background: white;
@@ -80,6 +82,7 @@ const YourStats = ({ statsRefreshTrigger }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
+  const showLoader = useMinimumLoadingDelay(loading, 500);
 
   useEffect(() => {
     const fetchUserStats = async () => {
@@ -118,7 +121,7 @@ const YourStats = ({ statsRefreshTrigger }) => {
     fetchUserStats();
   }, [statsRefreshTrigger, navigate]); // Add statsRefreshTrigger to dependency array
 
-  if (loading) return <StatsContainer><Title>Your Stats</Title><p>Loading stats...</p></StatsContainer>;
+  if (showLoader) return <StatsContainer><Title>Your Stats</Title><BrandedLoader message="Loading stats..." minHeight="180px" size="72px" /></StatsContainer>;
   if (error) return <StatsContainer><Title>Your Stats</Title><p>Error: {error}</p></StatsContainer>;
 
   return (

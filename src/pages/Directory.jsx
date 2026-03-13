@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import styled from 'styled-components';
 import { jwtDecode } from 'jwt-decode';
 import ProfileCard from '../components/ProfileCard';
+import BrandedLoader from '../components/BrandedLoader';
+import useMinimumLoadingDelay from '../hooks/useMinimumLoadingDelay';
 
 const DirectoryHeader = styled.div`
   display: flex;
@@ -63,6 +65,7 @@ const Directory = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [query, setQuery] = useState('');
+  const showLoader = useMinimumLoadingDelay(loading, 500);
   const viewerId = useMemo(() => {
     const token = localStorage.getItem('token');
     if (!token) return null;
@@ -138,7 +141,7 @@ const Directory = () => {
     });
   }, [students, query]);
 
-  if (loading) return <p>Loading classroom...</p>;
+  if (showLoader) return <BrandedLoader message="Loading classroom..." minHeight="60vh" />;
   if (error) return <p>Error loading classroom: {error}</p>;
 
   return (

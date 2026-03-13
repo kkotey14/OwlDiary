@@ -12,6 +12,8 @@ import PostCard from "./PostCard";
 import CreateCommentModal from "./CreateCommentModal"; // Import the new modal
 import { getAuthTokenOrLogout, handleAuthFailure } from "../utils/auth";
 import EditPostModal from './EditPostModal';
+import BrandedLoader from "./BrandedLoader";
+import useMinimumLoadingDelay from "../hooks/useMinimumLoadingDelay";
 
 const FeedContainer = styled.div`
     display: flex;
@@ -29,6 +31,7 @@ const ActivityFeed = forwardRef(({ fetchStats, refreshTrigger }, ref) => {
     const [viewer, setViewer] = useState({ id: null, isAdmin: false });
     const navigate = useNavigate();
     const [editingPost, setEditingPost] = useState(null);
+    const showLoader = useMinimumLoadingDelay(loading, 500);
 
     const fetchPosts = useCallback(async () => {
         setLoading(true);
@@ -94,7 +97,7 @@ const ActivityFeed = forwardRef(({ fetchStats, refreshTrigger }, ref) => {
         }
     }, [refreshTrigger, fetchPosts]);
 
-    if (loading) return <p>Loading posts...</p>;
+    if (showLoader) return <BrandedLoader message="Loading posts..." minHeight="280px" />;
     if (error) return <p>Error loading posts: {error}</p>;
 
     if (posts.length === 0) {
@@ -107,7 +110,6 @@ const ActivityFeed = forwardRef(({ fetchStats, refreshTrigger }, ref) => {
                 post.id === updatedPost.id ? updatedPost : post,
             ),
         );
-        fetchStats(); // Call fetchStats after a successful like operation
     };
 
     const handleOpenCommentModal = (postId) => {

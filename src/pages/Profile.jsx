@@ -7,6 +7,8 @@ import { jwtDecode } from 'jwt-decode';
 import { getAuthTokenOrLogout, handleAuthFailure } from '../utils/auth';
 import { resolveMediaUrl } from '../utils/media';
 import EditPostModal from '../components/EditPostModal';
+import BrandedLoader from '../components/BrandedLoader';
+import useMinimumLoadingDelay from '../hooks/useMinimumLoadingDelay';
 
 const BlogFeed = styled.div`
   display: grid;
@@ -326,6 +328,7 @@ const Profile = () => {
   const [postError, setPostError] = useState('');
   const dragIndexRef = useRef(null);
   const loadedStudentIdRef = useRef(null);
+  const showLoader = useMinimumLoadingDelay(loading, 500);
 
   const themeOptions = {
     classic: {
@@ -990,7 +993,7 @@ const Profile = () => {
     setProfileBackgroundPreview(addCacheBust(resolveMediaUrl(background)));
   }, [editingProfile, student]);
 
-  if (loading) return <p>Loading profile...</p>;
+  if (showLoader) return <BrandedLoader message="Loading profile..." minHeight="100vh" />;
   if (error) return <p>Error loading profile: {error}</p>;
   if (!student) return <p>Student not found.</p>;
 

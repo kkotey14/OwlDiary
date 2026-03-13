@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import styled from 'styled-components';
 import { FiHeart, FiMessageSquare } from 'react-icons/fi';
 import { resolveMediaUrl } from '../utils/media';
@@ -179,6 +179,8 @@ const PostCard = ({
 }) => {
   const [currentLikes, setCurrentLikes] = useState(post.likes);
   const [isLiked, setIsLiked] = useState(post.isLiked === 1);
+  const [isLikePending, setIsLikePending] = useState(false);
+  const likeRequestLockRef = useRef(false);
   const navigate = useNavigate();
   const canComment = typeof onCommentClick === 'function';
   const isHidden = post.is_hidden === 1 || post.is_hidden === true;
@@ -187,11 +189,22 @@ const PostCard = ({
   const handleLike = async (e) => {
     e.preventDefault();
     e.stopPropagation();
+    if (likeRequestLockRef.current || isLikePending) return;
 
     const token = getAuthTokenOrLogout(navigate);
     if (!token) {
       return;
     }
+
+    const previousLiked = isLiked;
+    const previousLikes = currentLikes;
+    const nextLiked = !previousLiked;
+    const nextLikes = Math.max(0, previousLikes + (nextLiked ? 1 : -1));
+
+    likeRequestLockRef.current = true;
+    setIsLikePending(true);
+    setIsLiked(nextLiked);
+    setCurrentLikes(nextLikes);
 
     try {
       const response = await fetch(`/api/posts/${post.id}/like`, {
@@ -204,6 +217,8 @@ const PostCard = ({
 
       if (!response.ok) {
         if (handleAuthFailure(response.status, navigate)) {
+          setIsLiked(previousLiked);
+          setCurrentLikes(previousLikes);
           return;
         }
         const errorText = await response.text();
@@ -221,7 +236,12 @@ const PostCard = ({
         fetchStats();
       }
     } catch (error) {
+      setIsLiked(previousLiked);
+      setCurrentLikes(previousLikes);
       console.error('handleLike: Error toggling like:', error);
+    } finally {
+      likeRequestLockRef.current = false;
+      setIsLikePending(false);
     }
   };
 
@@ -293,7 +313,7 @@ const PostCard = ({
         <ReadMore>[CLICK TO READ MORE]</ReadMore>
       </div>
       <EngagementBar>
-        <EngagementIcon onClick={handleLike}>
+        <EngagementIcon onClick={handleLike} style={{ opacity: isLikePending ? 0.7 : 1 }}>
           <StyledFiHeart $isLiked={isLiked} />
           <span>{currentLikes}</span>
         </EngagementIcon>

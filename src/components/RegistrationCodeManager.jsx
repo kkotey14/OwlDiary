@@ -3,6 +3,8 @@ import styled from "styled-components";
 import { useNavigate } from "react-router-dom";
 import { getAuthTokenOrLogout } from "../utils/auth";
 import { FiX } from "react-icons/fi";
+import BrandedLoader from "./BrandedLoader";
+import useMinimumLoadingDelay from "../hooks/useMinimumLoadingDelay";
 
 const ModalOverlay = styled.div`
     position: fixed;
@@ -82,6 +84,7 @@ const ManageCodesModal = ({ onClose }) => {
     const navigate = useNavigate();
     const [codes, setCodes] = useState([]);
     const [loading, setLoading] = useState(true);
+    const showLoader = useMinimumLoadingDelay(loading, 500);
 
     useEffect(() => {
         const fetchCodes = async () => {
@@ -119,10 +122,12 @@ const ManageCodesModal = ({ onClose }) => {
                 </CloseButton>
                 <h3>Registration Code History</h3>
 
-                {loading ? (
-                    <p style={{ padding: "2rem", textAlign: "center" }}>
-                        Loading history...
-                    </p>
+                {showLoader ? (
+                    <BrandedLoader
+                        message="Loading history..."
+                        minHeight="220px"
+                        size="64px"
+                    />
                 ) : (
                     <TableContainer>
                         <StyledTable>

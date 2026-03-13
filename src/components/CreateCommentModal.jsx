@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import styled from 'styled-components';
 import { useNavigate } from 'react-router-dom';
 import { getAuthTokenOrLogout, handleAuthFailure } from '../utils/auth';
+import BrandedLoader from './BrandedLoader';
+import useMinimumLoadingDelay from '../hooks/useMinimumLoadingDelay';
 
 const ModalOverlay = styled.div`
   position: fixed;
@@ -147,6 +149,7 @@ const CreateCommentModal = ({ postId, onClose, onCommentPosted }) => {
   const [comments, setComments] = useState([]);
   const [loadingComments, setLoadingComments] = useState(true);
   const navigate = useNavigate();
+  const showCommentsLoader = useMinimumLoadingDelay(loadingComments, 500);
 
   const fetchComments = useCallback(async () => {
     setLoadingComments(true);
@@ -245,8 +248,10 @@ const CreateCommentModal = ({ postId, onClose, onCommentPosted }) => {
         
         {/* Display existing comments */}
         <CommentsSection>
-          {loadingComments ? (
-            <NoComments>Loading comments...</NoComments>
+          {showCommentsLoader ? (
+            <NoComments as="div">
+              <BrandedLoader message="Loading comments..." minHeight="160px" size="56px" />
+            </NoComments>
           ) : comments.length === 0 ? (
             <NoComments>No comments yet. Be the first to comment!</NoComments>
           ) : (
