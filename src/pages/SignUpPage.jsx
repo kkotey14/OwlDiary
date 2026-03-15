@@ -47,7 +47,20 @@ const EditorialSection = styled.div`
     align-items: flex-start;
     padding-left: 10%;
     position: relative;
+    transform: translateY(-3rem);
     z-index: 2;
+`;
+
+const AnimationWrap = styled.div`
+    width: min(420px, 82vw);
+    margin-bottom: -1.8rem;
+    filter: drop-shadow(0 14px 30px rgba(15, 23, 42, 0.14));
+`;
+
+const EditorialImage = styled.img`
+    width: 100%;
+    height: auto;
+    display: block;
 `;
 
 const DateDetail = styled.p`
@@ -65,7 +78,7 @@ const WelcomeMessage = styled.h1`
     font-weight: 700;
     line-height: 1.1;
     color: #0f172a;
-    margin-left: -70px;
+    margin: 0;
 `;
 
 const FeaturedQuote = styled.blockquote`
@@ -188,38 +201,114 @@ const SuccessOverlay = styled.div`
 
 const SuccessModal = styled.div`
     width: 100%;
-    max-width: 420px;
-    background: rgba(255, 255, 255, 0.94);
-    backdrop-filter: blur(8px);
-    border: 1px solid rgba(95, 169, 255, 0.35);
-    border-radius: 18px;
-    box-shadow: 0 20px 45px rgba(15, 23, 42, 0.25);
-    padding: 1.6rem;
+    max-width: 460px;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(244, 248, 255, 0.96) 100%);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(95, 169, 255, 0.28);
+    border-radius: 24px;
+    box-shadow: 0 24px 55px rgba(15, 23, 42, 0.26);
+    padding: 2rem 1.8rem 1.7rem;
     text-align: center;
+    position: relative;
+    overflow: hidden;
+`;
+
+const SuccessGlow = styled.div`
+    position: absolute;
+    width: 220px;
+    height: 220px;
+    border-radius: 999px;
+    background: radial-gradient(
+        circle,
+        rgba(95, 169, 255, 0.28) 0%,
+        rgba(95, 169, 255, 0) 72%
+    );
+    top: -110px;
+    right: -70px;
+    pointer-events: none;
+`;
+
+const SuccessBadge = styled.div`
+    width: 74px;
+    height: 74px;
+    margin: 0 auto 1rem;
+    border-radius: 22px;
+    display: grid;
+    place-items: center;
+    font-size: 2rem;
+    background: linear-gradient(135deg, #5fa9ff 0%, #dbeafe 100%);
+    box-shadow: 0 14px 30px rgba(95, 169, 255, 0.28);
+    position: relative;
+    z-index: 1;
+`;
+
+const SuccessEyebrow = styled.p`
+    margin: 0 0 0.45rem 0;
+    color: #2563eb;
+    font-size: 0.76rem;
+    font-weight: 700;
+    letter-spacing: 0.18rem;
+    text-transform: uppercase;
+    position: relative;
+    z-index: 1;
 `;
 
 const SuccessTitle = styled.h3`
     font-family: "Playfair Display", serif;
-    font-size: 1.8rem;
-    margin: 0 0 0.5rem 0;
+    font-size: 2rem;
+    margin: 0 0 0.65rem 0;
     color: #0f172a;
+    position: relative;
+    z-index: 1;
 `;
 
 const SuccessText = styled.p`
-    margin: 0 0 1.2rem 0;
-    color: rgba(15, 23, 42, 0.8);
+    margin: 0 auto 1.35rem;
+    color: rgba(15, 23, 42, 0.78);
     font-size: 1rem;
+    line-height: 1.65;
+    max-width: 34ch;
+    position: relative;
+    z-index: 1;
+`;
+
+const SuccessInfo = styled.div`
+    margin: 0 auto 1.35rem;
+    padding: 0.9rem 1rem;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.78);
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    color: #334155;
+    font-size: 0.92rem;
+    line-height: 1.55;
+    max-width: 34ch;
+    position: relative;
+    z-index: 1;
 `;
 
 const SuccessButton = styled.button`
-    padding: 0.85rem 1.2rem;
+    padding: 0.95rem 1.3rem;
     border: none;
-    border-radius: 10px;
+    border-radius: 14px;
     background: #0f172a;
     color: #ffffff;
-    font-size: 0.95rem;
+    font-size: 0.96rem;
     font-weight: 600;
     cursor: pointer;
+    min-width: 220px;
+    position: relative;
+    z-index: 1;
+    transition:
+        transform 0.18s ease,
+        box-shadow 0.18s ease,
+        background-color 0.18s ease;
+
+    &:hover {
+        background: #111827;
+        transform: translateY(-1px);
+        box-shadow: 0 12px 24px rgba(15, 23, 42, 0.22);
+    }
 `;
 
 const CodeInputWrapper = styled.div`
@@ -355,6 +444,12 @@ const SignUpPage = () => {
     return (
         <PageWrapper>
             <EditorialSection>
+                <AnimationWrap aria-hidden="true">
+                    <EditorialImage
+                        src="/Poetry-rafiki.png"
+                        alt="Poetry illustration"
+                    />
+                </AnimationWrap>
                 <WelcomeMessage>Start Your Story</WelcomeMessage>
                 <FeaturedQuote>
                     'The palest ink is better than the best memory.' — Chinese
@@ -444,12 +539,19 @@ const SignUpPage = () => {
             {showSuccessPopup && (
                 <SuccessOverlay>
                     <SuccessModal>
+                        <SuccessGlow />
+                        <SuccessBadge>✓</SuccessBadge>
+                        <SuccessEyebrow>Request Received</SuccessEyebrow>
                         <SuccessTitle>Account Created</SuccessTitle>
                         <SuccessText>
-                            Your account request has been submitted and is
-                            awaiting approval. You will receive an email once it
-                            is reviewed.{" "}
+                            Your Owl Diary account request has been submitted
+                            successfully.
                         </SuccessText>
+                        <SuccessInfo>
+                            Your access is now awaiting approval. You will
+                            receive an email once your request has been
+                            reviewed.
+                        </SuccessInfo>
                         <SuccessButton
                             type="button"
                             onClick={() => {

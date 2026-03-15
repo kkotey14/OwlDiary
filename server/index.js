@@ -330,6 +330,21 @@ VALUES (${name}, ${email}, ${hashedPassword}, ${avatar_url}, ${about_me}, 'pendi
 RETURNING id
 `);
 
+        const admins = await dbAll(
+            "SELECT id FROM students WHERE role = $1 AND COALESCE(approval_status, 'approved') = 'approved'",
+            ["admin"],
+        );
+
+        await Promise.all(
+            admins.map((admin) =>
+                createNotification(
+                    admin.id,
+                    `${name} signed up and is awaiting approval.`,
+                    "/settings",
+                ),
+            ),
+        );
+
         return res.status(201).json({ message: "User created successfully." });
     } catch (error) {
         console.error("Signup error:", error);
@@ -1033,6 +1048,7 @@ app.get("/api/students", async (req, res) => {
               MAX(p.created_at) AS latest_post_at
             FROM students s
             LEFT JOIN posts p ON p.student_id = s.id AND p.is_hidden = 0
+            WHERE COALESCE(s.approval_status, 'approved') = 'approved'
             GROUP BY s.id
             ORDER BY s.name`,
         );
@@ -1048,7 +1064,10 @@ app.get("/api/students/:id", async (req, res, next) => {
         return next();
     }
     try {
-        const row = await dbGet("SELECT * FROM students WHERE id = $1", [id]);
+        const row = await dbGet(
+            "SELECT * FROM students WHERE id = $1 AND COALESCE(approval_status, 'approved') = 'approved'",
+            [id],
+        );
         if (!row) {
             return res.status(404).json({ error: "Student not found" });
         }

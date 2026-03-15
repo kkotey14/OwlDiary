@@ -4,6 +4,8 @@ import { useNavigate } from "react-router-dom";
 import { FiX } from "react-icons/fi";
 import { getAuthTokenOrLogout } from "../utils/auth";
 import { SendApprovalEmail, SendRejectionEmail } from "@/utils/email";
+import BrandedLoader from "./BrandedLoader";
+import useMinimumLoadingDelay from "../hooks/useMinimumLoadingDelay";
 
 const ModalOverlay = styled.div`
     position: fixed;
@@ -28,6 +30,18 @@ const ModalCard = styled.div`
     display: flex;
     flex-direction: column;
     position: relative;
+`;
+
+const BusyOverlay = styled.div`
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.86);
+    backdrop-filter: blur(2px);
+    border-radius: 12px;
+    z-index: 2;
 `;
 
 const CloseButton = styled.button`
@@ -164,6 +178,20 @@ const PageText = styled.span`
     font-weight: 600;
 `;
 
+const ErrorText = styled.p`
+    margin: 0.75rem 0 0;
+    color: #b91c1c;
+    font-size: 0.9rem;
+    font-weight: 600;
+`;
+
+const SuccessText = styled.p`
+    margin: 0.75rem 0 0;
+    color: #047857;
+    font-size: 0.9rem;
+    font-weight: 600;
+`;
+
 const StudentAcceptanceModal = ({ onClose, refreshPendingCount }) => {
     const navigate = useNavigate();
 
@@ -171,13 +199,25 @@ const StudentAcceptanceModal = ({ onClose, refreshPendingCount }) => {
     const [page, setPage] = useState(1);
     const [busyId, setBusyId] = useState(null);
     const [busyAll, setBusyAll] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [busyMessage, setBusyMessage] = useState("");
+    const [error, setError] = useState("");
+    const [successMessage, setSuccessMessage] = useState("");
+    const showLoader = useMinimumLoadingDelay(loading, 500);
 
     const limit = 10;
 
     useEffect(() => {
         const loadPendingStudents = async () => {
             const token = getAuthTokenOrLogout(navigate);
-            if (!token) return;
+            if (!token) {
+                setLoading(false);
+                return;
+            }
+
+            setLoading(true);
+            setError("");
+            setSuccessMessage("");
 
             try {
                 const res = await fetch(
@@ -188,6 +228,8 @@ const StudentAcceptanceModal = ({ onClose, refreshPendingCount }) => {
                 );
 
                 if (!res.ok) {
+                    const errorText = await res.text();
+                    setError(errorText || "Failed to load pending students.");
                     setStudents([]);
                     return;
                 }
@@ -196,6 +238,9 @@ const StudentAcceptanceModal = ({ onClose, refreshPendingCount }) => {
                 setStudents(Array.isArray(data) ? data : []);
             } catch (err) {
                 console.error("Error fetching pending students:", err);
+                setError("Failed to load pending students.");
+            } finally {
+                setLoading(false);
             }
         };
 
@@ -205,72 +250,99 @@ const StudentAcceptanceModal = ({ onClose, refreshPendingCount }) => {
     const approveStudent = async (id, name, email) => {
         const token = getAuthTokenOrLogout(navigate);
         if (!token) return;
+        setError("");
+        setSuccessMessage("");
         setBusyId(id);
+        setBusyMessage("Approving student...");
 
-        const res = await fetch(`/api/students/${id}/approve`, {
-            method: "POST",
-            headers: { Authorization: `Bearer ${token}` },
-        });
-
-        if (!res.ok) {
-            setBusyId(null);
-            return;
-        }
         try {
-            await SendApprovalEmail(name, email);
-            console.log(`Approval email sent to ${email}`);
+            const res = await fetch(`/api/students/${id}/approve`, {
+                method: "POST",
+                headers: { Authorization: `Bearer ${token}` },
+            });
+
+            if (!res.ok) {
+                const errorText = await res.text();
+                setError(errorText || "Failed to approve student.");
+                return;
+            }
+            try {
+                await SendApprovalEmail(name, email);
+                console.log(`Approval email sent to ${email}`);
+            } catch (err) {
+                console.error("Approval email failed:", err);
+            }
+            refreshPendingCount();
+            setSuccessMessage(`${name} was successfully approved.`);
+
+            const updated = students.filter((s) => s.id !== id);
+
+            if (updated.length === 0 && page > 1) {
+                setPage((p) => p - 1);
+            } else {
+                setStudents(updated);
+            }
         } catch (err) {
-            console.error("Approval email failed:", err);
+            console.error("Error approving student:", err);
+            setError("Failed to approve student.");
+        } finally {
+            setBusyId(null);
+            setBusyMessage("");
         }
-        refreshPendingCount();
-
-        const updated = students.filter((s) => s.id !== id);
-
-        if (updated.length === 0 && page > 1) {
-            setPage((p) => p - 1);
-        } else {
-            setStudents(updated);
-        }
-        setBusyId(null);
     };
 
     const denyStudent = async (id, name, email) => {
         const token = getAuthTokenOrLogout(navigate);
         if (!token) return;
+        setError("");
+        setSuccessMessage("");
         setBusyId(id);
+        setBusyMessage("Denying student...");
 
-        const res = await fetch(`/api/students/${id}/deny`, {
-            method: "POST",
-            headers: { Authorization: `Bearer ${token}` },
-        });
-
-        if (!res.ok) {
-            setBusyId(null);
-            return;
-        }
         try {
-            await SendRejectionEmail(name, email);
-            console.log(`Rejection email sent to ${email}`);
+            const res = await fetch(`/api/students/${id}/deny`, {
+                method: "POST",
+                headers: { Authorization: `Bearer ${token}` },
+            });
+
+            if (!res.ok) {
+                const errorText = await res.text();
+                setError(errorText || "Failed to deny student.");
+                return;
+            }
+            try {
+                await SendRejectionEmail(name, email);
+                console.log(`Rejection email sent to ${email}`);
+            } catch (err) {
+                console.error("Rejection email failed:", err);
+            }
+
+            refreshPendingCount();
+            setSuccessMessage(`${name} was successfully denied and removed.`);
+
+            const updated = students.filter((s) => s.id !== id);
+
+            if (updated.length === 0 && page > 1) {
+                setPage((p) => p - 1);
+            } else {
+                setStudents(updated);
+            }
         } catch (err) {
-            console.error("Rejection email failed:", err);
+            console.error("Error denying student:", err);
+            setError("Failed to deny student.");
+        } finally {
+            setBusyId(null);
+            setBusyMessage("");
         }
-
-        refreshPendingCount();
-
-        const updated = students.filter((s) => s.id !== id);
-
-        if (updated.length === 0 && page > 1) {
-            setPage((p) => p - 1);
-        } else {
-            setStudents(updated);
-        }
-        setBusyId(null);
     };
 
-    const approveAll = async (name, email) => {
+    const approveAll = async () => {
         const token = getAuthTokenOrLogout(navigate);
         if (!token) return;
+        setError("");
+        setSuccessMessage("");
         setBusyAll(true);
+        setBusyMessage("Approving all students...");
 
         try {
             const res = await fetch("/api/students/approve-all", {
@@ -278,7 +350,11 @@ const StudentAcceptanceModal = ({ onClose, refreshPendingCount }) => {
                 headers: { Authorization: `Bearer ${token}` },
             });
 
-            if (!res.ok) return;
+            if (!res.ok) {
+                const errorText = await res.text();
+                setError(errorText || "Failed to approve all students.");
+                return;
+            }
 
             for (const student of students) {
                 try {
@@ -294,16 +370,28 @@ const StudentAcceptanceModal = ({ onClose, refreshPendingCount }) => {
             setStudents([]);
 
             refreshPendingCount();
+            setSuccessMessage("All pending students were successfully approved.");
         } catch (err) {
             console.error("Error approving all students:", err);
+            setError("Failed to approve all students.");
         } finally {
             setBusyAll(false);
+            setBusyMessage("");
         }
     };
 
     return (
         <ModalOverlay onClick={onClose}>
             <ModalCard onClick={(e) => e.stopPropagation()}>
+                {(busyId !== null || busyAll) && (
+                    <BusyOverlay>
+                        <BrandedLoader
+                            message={busyMessage || "Loading..."}
+                            minHeight="220px"
+                            size="72px"
+                        />
+                    </BusyOverlay>
+                )}
                 <CloseButton onClick={onClose}>
                     <FiX size={20} />
                 </CloseButton>
@@ -315,16 +403,24 @@ const StudentAcceptanceModal = ({ onClose, refreshPendingCount }) => {
                     </Title>
                     <Meta>Review and approve registration requests.</Meta>
                 </Header>
+                {error && <ErrorText>{error}</ErrorText>}
+                {successMessage && <SuccessText>{successMessage}</SuccessText>}
 
                 {students.length > 0 && (
                     <ApproveAllBtn
                         onClick={approveAll}
                         disabled={busyAll}>
-                        Approve All
+                        {busyAll ? "Approving..." : "Approve All"}
                     </ApproveAllBtn>
                 )}
 
-                {students.length === 0 ? (
+                {showLoader ? (
+                    <BrandedLoader
+                        message="Loading pending students..."
+                        minHeight="280px"
+                        size="72px"
+                    />
+                ) : students.length === 0 ? (
                     <EmptyState>No pending students.</EmptyState>
                 ) : (
                     <>
@@ -352,7 +448,9 @@ const StudentAcceptanceModal = ({ onClose, refreshPendingCount }) => {
                                                     student.email,
                                                 )
                                             }>
-                                            Approve
+                                            {busyId === student.id
+                                                ? "Working..."
+                                                : "Approve"}
                                         </ActionBtn>
 
                                         <ActionBtn
@@ -365,7 +463,9 @@ const StudentAcceptanceModal = ({ onClose, refreshPendingCount }) => {
                                                     student.email,
                                                 )
                                             }>
-                                            Deny
+                                            {busyId === student.id
+                                                ? "Working..."
+                                                : "Deny"}
                                         </ActionBtn>
                                     </ButtonGroup>
                                 </StudentRow>

@@ -20,14 +20,14 @@ const SidebarContainer = styled.aside`
 `;
 
 const NavItem = styled(NavLink)`
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(15, 23, 42, 0.62);
   font-size: 1.8rem;
   transition: all 0.3s ease;
   position: relative;
 
   &.active,
   &:hover {
-    color: white;
+    color: #0f172a;
     transform: scale(1.1);
   }
 
@@ -53,14 +53,14 @@ const NavItem = styled(NavLink)`
 const ActionItem = styled.button`
   background: none;
   border: none;
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(15, 23, 42, 0.62);
   font-size: 1.8rem;
   cursor: pointer;
   transition: all 0.3s ease;
   position: relative;
 
   &:hover {
-    color: white;
+    color: #0f172a;
     transform: scale(1.1);
   }
 
@@ -108,7 +108,7 @@ const BellBadge = styled.span`
 const LogoutButton = styled.button`
   background: none;
   border: none;
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(15, 23, 42, 0.62);
   font-size: 1.8rem;
   cursor: pointer;
   transition: all 0.3s ease;
@@ -116,7 +116,7 @@ const LogoutButton = styled.button`
   margin-bottom: 2rem;
 
   &:hover {
-    color: white;
+    color: #0f172a;
     transform: scale(1.1);
   }
 `;
