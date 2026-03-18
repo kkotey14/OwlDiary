@@ -550,15 +550,10 @@ const PostPage = () => {
     const token = getAuthTokenOrLogout(navigate);
     if (!token) return;
 
-    const previousLiked = isLiked;
-    const previousLikeCount = Number(likeCount) || 0;
-    const nextLiked = !previousLiked;
-    const nextLikeCount = Math.max(0, previousLikeCount + (nextLiked ? 1 : -1));
+    const nextLiked = !isLiked;
 
     postLikeLockRef.current = true;
     setIsPostLikePending(true);
-    setIsLiked(nextLiked);
-    setLikeCount(nextLikeCount);
 
     try {
       const res = await fetch(`/api/posts/${postId}/like`, {
@@ -573,12 +568,8 @@ const PostPage = () => {
 
       if (!res.ok) {
         if (handleAuthFailure(res.status, navigate)) {
-          setIsLiked(previousLiked);
-          setLikeCount(previousLikeCount);
           return;
         }
-        setIsLiked(previousLiked);
-        setLikeCount(previousLikeCount);
         return;
       }
 
@@ -587,8 +578,6 @@ const PostPage = () => {
       setIsLiked(updated.isLiked === 1 || updated.isLiked === true);
       setLikeCount(Number(updated.likes) || 0);
     } catch (err) {
-      setIsLiked(previousLiked);
-      setLikeCount(previousLikeCount);
       console.error('Error toggling like:', err);
     } finally {
       postLikeLockRef.current = false;

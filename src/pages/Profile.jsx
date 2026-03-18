@@ -1096,6 +1096,12 @@ const Profile = () => {
     setEditingPost(post);
   };
 
+  const handleLikeSuccess = (updatedPost) => {
+    setPosts((prev) =>
+      prev.map((post) => (post.id === updatedPost.id ? { ...post, ...updatedPost } : post))
+    );
+  };
+
   const handleDeletePost = async (post) => {
     if (!window.confirm('Delete this post? This cannot be undone.')) {
       return;
@@ -1254,6 +1260,7 @@ const Profile = () => {
           >
             <PostCard
               post={post}
+              onLikeSuccess={handleLikeSuccess}
               canEdit={isOwner}
               canHide={isOwner || isAdmin}
               onEdit={handleEditPost}

@@ -208,15 +208,10 @@ const PostCard = ({
       return;
     }
 
-    const previousLiked = isLiked;
-    const previousLikes = Number(currentLikes) || 0;
-    const nextLiked = !previousLiked;
-    const nextLikes = Math.max(0, previousLikes + (nextLiked ? 1 : -1));
+    const nextLiked = !isLiked;
 
     likeRequestLockRef.current = true;
     setIsLikePending(true);
-    setIsLiked(nextLiked);
-    setCurrentLikes(nextLikes);
 
     try {
       const response = await fetch(`/api/posts/${post.id}/like`, {
@@ -230,8 +225,6 @@ const PostCard = ({
 
       if (!response.ok) {
         if (handleAuthFailure(response.status, navigate)) {
-          setIsLiked(previousLiked);
-          setCurrentLikes(previousLikes);
           return;
         }
         const errorText = await response.text();
@@ -249,8 +242,6 @@ const PostCard = ({
         fetchStats();
       }
     } catch (error) {
-      setIsLiked(previousLiked);
-      setCurrentLikes(previousLikes);
       console.error('handleLike: Error toggling like:', error);
     } finally {
       likeRequestLockRef.current = false;
