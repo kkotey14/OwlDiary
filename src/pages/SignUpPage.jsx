@@ -57,10 +57,6 @@ const AnimationWrap = styled.div`
     min-height: 320px;
     margin-bottom: -1.8rem;
     filter: drop-shadow(0 14px 30px rgba(15, 23, 42, 0.14));
-    border-radius: 28px;
-    overflow: hidden;
-    background:
-        radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.85) 0%, rgba(219, 234, 254, 0.95) 48%, rgba(191, 219, 254, 0.75) 100%);
     display: grid;
     place-items: center;
 `;
