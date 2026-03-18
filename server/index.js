@@ -18,9 +18,21 @@ const app = express();
 const port = process.env.PORT || 5050;
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
 const SCHEMA_PATH = path.join(__dirname, "../Database/schema.sql");
-const UPLOADS_DIR = process.env.UPLOAD_DIR || path.join(__dirname, "uploads");
+const DEFAULT_UPLOADS_DIR = path.join(__dirname, "uploads");
 
-fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+let UPLOADS_DIR = process.env.UPLOAD_DIR || DEFAULT_UPLOADS_DIR;
+try {
+    fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+} catch (error) {
+    if (error.code !== "EACCES") {
+        throw error;
+    }
+    UPLOADS_DIR = DEFAULT_UPLOADS_DIR;
+    fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+    console.warn(
+        `Upload directory "${process.env.UPLOAD_DIR}" is not writable. Falling back to "${UPLOADS_DIR}".`,
+    );
+}
 
 // Database setup
 const sql = postgres(process.env.DATABASE_URL, {
