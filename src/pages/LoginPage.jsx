@@ -283,8 +283,6 @@ const LoginPage = () => {
   };
 
   const handleDemoLogin = async () => {
-    setEmail(DEMO_EMAIL);
-    setPassword(DEMO_PASSWORD);
     await loginUser(DEMO_EMAIL, DEMO_PASSWORD);
   };
 
