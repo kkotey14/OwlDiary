@@ -12,10 +12,18 @@ const isExpired = (token) => {
   }
 };
 
-export const getAuthTokenOrLogout = (navigate) => {
+export const getStoredAuthToken = () => {
   const token = localStorage.getItem('token');
   if (!token || isExpired(token)) {
     localStorage.removeItem('token');
+    return null;
+  }
+  return token;
+};
+
+export const getAuthTokenOrLogout = (navigate) => {
+  const token = getStoredAuthToken();
+  if (!token) {
     if (navigate) {
       navigate('/login');
     }

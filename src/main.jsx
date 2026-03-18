@@ -1,8 +1,14 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import {
+    Navigate,
+    Outlet,
+    createBrowserRouter,
+    RouterProvider,
+} from "react-router-dom";
 import App from "./App.jsx";
 import "./index.css";
+import { getStoredAuthToken } from "./utils/auth";
 
 // Page Components
 import Dashboard from "./pages/Dashboard.jsx";
@@ -15,46 +21,72 @@ import ForgotPasswordPage from "./pages/ForgotPasswordPage.jsx";
 import Settings from "./pages/Settings.jsx";
 import Notifications from "./pages/Notifications.jsx";
 
+const ProtectedRoute = () => {
+    const token = getStoredAuthToken();
+    if (!token) {
+        return <Navigate to="/login" replace />;
+    }
+    return <Outlet />;
+};
+
+const PublicOnlyRoute = () => {
+    const token = getStoredAuthToken();
+    if (token) {
+        return <Navigate to="/" replace />;
+    }
+    return <Outlet />;
+};
+
 const router = createBrowserRouter([
     {
-        path: "/login",
-        element: <LoginPage />,
-    },
-    {
-        path: "/signup",
-        element: <SignUpPage />,
-    },
-    {
-        path: "/forgot-password",
-        element: <ForgotPasswordPage />,
-    },
-    {
-        path: "/",
-        element: <App />,
+        element: <PublicOnlyRoute />,
         children: [
             {
-                index: true,
-                element: <Dashboard />,
+                path: "/login",
+                element: <LoginPage />,
             },
             {
-                path: "directory",
-                element: <Directory />,
+                path: "/signup",
+                element: <SignUpPage />,
             },
             {
-                path: "profile/:studentId",
-                element: <Profile />,
+                path: "/forgot-password",
+                element: <ForgotPasswordPage />,
             },
+        ],
+    },
+    {
+        element: <ProtectedRoute />,
+        children: [
             {
-                path: "notifications",
-                element: <Notifications />,
-            },
-            {
-                path: "settings",
-                element: <Settings />,
-            },
-            {
-                path: "post/:postId",
-                element: <PostPage />,
+                path: "/",
+                element: <App />,
+                children: [
+                    {
+                        index: true,
+                        element: <Dashboard />,
+                    },
+                    {
+                        path: "directory",
+                        element: <Directory />,
+                    },
+                    {
+                        path: "profile/:studentId",
+                        element: <Profile />,
+                    },
+                    {
+                        path: "notifications",
+                        element: <Notifications />,
+                    },
+                    {
+                        path: "settings",
+                        element: <Settings />,
+                    },
+                    {
+                        path: "post/:postId",
+                        element: <PostPage />,
+                    },
+                ],
             },
         ],
     },
