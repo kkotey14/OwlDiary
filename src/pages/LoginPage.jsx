@@ -308,7 +308,7 @@ const LoginPage = () => {
           <DemoPanel>
             <DemoTitle>Demo Access</DemoTitle>
             <DemoCopy>
-              Reviewing the project? Use the demo account to explore the app immediately.
+              Reviewing the project? This signs you into a preloaded sample account so you can explore the app immediately.
             </DemoCopy>
             <DemoButton type="button" onClick={handleDemoLogin} disabled={isSubmitting}>
               Continue as Demo User
