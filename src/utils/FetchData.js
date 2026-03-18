@@ -1,6 +1,6 @@
 export const exportUserData = async () => {
     try {
-        const response = await fetch("http://localhost:5173/api/export", {
+        const response = await fetch("/api/export", {
             method: "GET",
             headers: {
                 "Content-Type": "application/json",

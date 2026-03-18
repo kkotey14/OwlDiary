@@ -4,7 +4,7 @@ export const resolveMediaUrl = (url) => {
     return url;
   }
   if (url.startsWith('/uploads/')) {
-    return `http://localhost:5050${url}`;
+    return url;
   }
   return url;
 };

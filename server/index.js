@@ -18,6 +18,9 @@ const app = express();
 const port = process.env.PORT || 5050;
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
 const SCHEMA_PATH = path.join(__dirname, "../Database/schema.sql");
+const UPLOADS_DIR = process.env.UPLOAD_DIR || path.join(__dirname, "uploads");
+
+fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 // Database setup
 const sql = postgres(process.env.DATABASE_URL, {
@@ -202,7 +205,7 @@ const initializeDatabase = async () => {
 app.use(cors());
 app.use(express.json());
 
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+app.use("/uploads", express.static(UPLOADS_DIR));
 app.get("/uploads/:filename", (req, res) => {
     return res
         .status(200)
@@ -214,7 +217,7 @@ app.get("/uploads/:filename", (req, res) => {
 
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
-        cb(null, path.join(__dirname, "uploads"));
+        cb(null, UPLOADS_DIR);
     },
     filename: function (req, file, cb) {
         cb(null, Date.now() + "-" + file.originalname);
@@ -236,7 +239,7 @@ const upload = multer({ storage: storage, fileFilter: fileFilter });
 
 const avatarStorage = multer.diskStorage({
     destination: function (req, file, cb) {
-        cb(null, path.join(__dirname, "uploads"));
+        cb(null, UPLOADS_DIR);
     },
     filename: function (req, file, cb) {
         const userId = req.user ? req.user.id : "unknown";
@@ -257,7 +260,7 @@ const avatarUpload = multer({
 });
 const galleryStorage = multer.diskStorage({
     destination: function (req, file, cb) {
-        cb(null, path.join(__dirname, "uploads"));
+        cb(null, UPLOADS_DIR);
     },
     filename: function (req, file, cb) {
         const userId = req.user ? req.user.id : "unknown";
