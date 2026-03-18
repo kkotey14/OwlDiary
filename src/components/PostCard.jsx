@@ -194,10 +194,9 @@ const PostCard = ({
   const postHref = `/post/${post.id}`;
 
   useEffect(() => {
-    if (isLikePending) return;
     setCurrentLikes(Number(post.likes) || 0);
     setIsLiked(post.isLiked === 1 || post.isLiked === true);
-  }, [post.likes, post.isLiked, isLikePending]);
+  }, [post.id, post.likes, post.isLiked]);
 
   const handleLike = async (e) => {
     e.preventDefault();
