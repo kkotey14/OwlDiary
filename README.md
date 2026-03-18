@@ -6,7 +6,7 @@ OwlDiary is a full-stack social journaling platform built as a university capsto
 
 Visit the project here:
 
-`https://owldiary.onrender.com`
+`https://owl-diary.vercel.app`
 
 ## What The App Does
 
@@ -43,6 +43,10 @@ Visit the project here:
 
 This project was designed to demonstrate practical software engineering skills through a real, user-facing platform. The focus was on building a polished full-stack experience with meaningful interactivity, user roles, media handling, and deployable infrastructure rather than just a static prototype.
 
+## Context
+
+OwlDiary was created as a team-based university capstone project. The official class version is hosted on the SCSU server and is the version used for course purposes. This deployment is a separate live demo maintained to showcase the project experience, product design, and technical work in a portfolio setting.
+
 ## Notes
 
-This repository README is intentionally written as a project overview for instructors, reviewers, and recruiters. The emphasis is on the product, technical scope, and live demonstration rather than internal deployment details.
+This README is intentionally written as a project overview for instructors, reviewers, and recruiters. The emphasis is on the product, technical scope, and live demonstration rather than internal deployment details.
