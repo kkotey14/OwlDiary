@@ -630,7 +630,7 @@ app.post("/api/posts/:id/like", authenticateToken, async (req, res) => {
                 p.created_at, p.media_url,
                 p.is_hidden, p.display_order, p.post_font_family,
                 s.name as student_name, s.avatar_url as student_avatar,
-                CASE WHEN EXISTS (SELECT 1 FROM likes WHERE user_id = $1 AND post_id = p.id) THEN 1 ELSE 0 END AS isLiked,
+                CASE WHEN EXISTS (SELECT 1 FROM likes WHERE user_id = $1 AND post_id = p.id) THEN 1 ELSE 0 END AS "isLiked",
                 (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) AS comment_count
             FROM posts p
             JOIN students s ON p.student_id = s.id
@@ -689,7 +689,7 @@ app.put("/api/posts/:id", authenticateToken, async (req, res) => {
                 p.created_at, p.media_url,
                 p.is_hidden, p.display_order, p.post_font_family,
                 s.name as student_name, s.avatar_url as student_avatar,
-                CASE WHEN EXISTS (SELECT 1 FROM likes WHERE user_id = $1 AND post_id = p.id) THEN 1 ELSE 0 END AS isLiked,
+                CASE WHEN EXISTS (SELECT 1 FROM likes WHERE user_id = $1 AND post_id = p.id) THEN 1 ELSE 0 END AS "isLiked",
                 (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) AS comment_count
             FROM posts p
             JOIN students s ON p.student_id = s.id
@@ -747,7 +747,7 @@ app.put("/api/posts/:id/visibility", authenticateToken, async (req, res) => {
                 p.id, p.student_id, p.title, p.content, p.post_type, p.likes, p.created_at, p.media_url,
                 p.is_hidden, p.display_order, p.post_font_family,
                 s.name as student_name, s.avatar_url as student_avatar,
-                CASE WHEN EXISTS (SELECT 1 FROM likes WHERE user_id = $1 AND post_id = p.id) THEN 1 ELSE 0 END AS isLiked,
+                CASE WHEN EXISTS (SELECT 1 FROM likes WHERE user_id = $1 AND post_id = p.id) THEN 1 ELSE 0 END AS "isLiked",
                 (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) AS comment_count
             FROM posts p
             JOIN students s ON p.student_id = s.id
@@ -1077,7 +1077,7 @@ app.get("/api/posts/:id", authenticateToken, async (req, res) => {
                 p.created_at, p.media_url,
                 p.is_hidden, p.display_order, p.post_font_family,
                 s.name as student_name, s.avatar_url as student_avatar,
-                CASE WHEN EXISTS (SELECT 1 FROM likes WHERE user_id = $1 AND post_id = p.id) THEN 1 ELSE 0 END AS isLiked,
+                CASE WHEN EXISTS (SELECT 1 FROM likes WHERE user_id = $1 AND post_id = p.id) THEN 1 ELSE 0 END AS "isLiked",
                 (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) AS comment_count
             FROM posts p
             JOIN students s ON p.student_id = s.id
@@ -1106,7 +1106,7 @@ app.get("/api/posts", authenticateToken, async (req, res) => {
                 p.created_at, p.media_url,
                 p.is_hidden, p.display_order, p.post_font_family,
                 s.name as student_name, s.avatar_url as student_avatar,
-                CASE WHEN l.user_id IS NOT NULL THEN 1 ELSE 0 END AS isLiked,
+                CASE WHEN l.user_id IS NOT NULL THEN 1 ELSE 0 END AS "isLiked",
                 (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) AS comment_count
             FROM posts p
             JOIN students s ON p.student_id = s.id
@@ -1358,7 +1358,7 @@ app.get("/api/students/:id/posts", async (req, res) => {
             CASE WHEN EXISTS (
                 SELECT 1 FROM likes l
                 WHERE l.user_id = $2 AND l.post_id = p.id
-            ) THEN 1 ELSE 0 END AS isLiked,
+            ) THEN 1 ELSE 0 END AS "isLiked",
             (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) AS comment_count
         FROM posts p
         JOIN students s ON p.student_id = s.id
@@ -1480,7 +1480,7 @@ app.post("/api/comments/:id/like", authenticateToken, async (req, res) => {
                 s.name AS user_name, s.avatar_url AS user_avatar,
                 CASE WHEN EXISTS (
                     SELECT 1 FROM comment_likes WHERE user_id = $1 AND comment_id = c.id
-                ) THEN 1 ELSE 0 END AS isLiked
+                ) THEN 1 ELSE 0 END AS "isLiked"
             FROM comments c
             JOIN students s ON c.user_id = s.id
             WHERE c.id = $2`,
