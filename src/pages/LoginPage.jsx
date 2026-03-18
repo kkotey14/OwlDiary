@@ -176,16 +176,69 @@ const ErrorMessage = styled.p`
   text-align: center;
 `;
 
+const DemoPanel = styled.div`
+  border-radius: 14px;
+  padding: 1rem 1.1rem;
+  background: rgba(15, 23, 42, 0.08);
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+`;
+
+const DemoTitle = styled.div`
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(15, 23, 42, 0.8);
+`;
+
+const DemoCopy = styled.p`
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: rgba(15, 23, 42, 0.85);
+`;
+
+const DemoButton = styled.button`
+  padding: 0.95rem 1rem;
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #0f172a 0%, #1d4ed8 100%);
+  color: #ffffff;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 22px rgba(29, 78, 216, 0.22);
+  }
+
+  &:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+  }
+`;
+
+const DEMO_EMAIL = 'maya.thompson@owldiary.demo';
+const DEMO_PASSWORD = 'Password123!';
+
 const LoginPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false); // New state for password visibility
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const loginUser = async (nextEmail, nextPassword) => {
     setError('');
+    setIsSubmitting(true);
 
     try {
       const response = await fetch('/api/login', {
@@ -193,7 +246,7 @@ const LoginPage = () => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email: nextEmail, password: nextPassword }),
       });
 
       let data;
@@ -219,7 +272,20 @@ const LoginPage = () => {
     } catch (error) {
       const isNetworkFailure = error instanceof TypeError;
       setError(isNetworkFailure ? 'Cannot reach server. Ensure backend is running on port 5050.' : error.message);
+    } finally {
+      setIsSubmitting(false);
     }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    await loginUser(email, password);
+  };
+
+  const handleDemoLogin = async () => {
+    setEmail(DEMO_EMAIL);
+    setPassword(DEMO_PASSWORD);
+    await loginUser(DEMO_EMAIL, DEMO_PASSWORD);
   };
 
   return (
@@ -239,6 +305,15 @@ const LoginPage = () => {
         <GlassForm onSubmit={handleSubmit}>
           <Title>Login</Title>
           {error && <ErrorMessage>{error}</ErrorMessage>}
+          <DemoPanel>
+            <DemoTitle>Demo Access</DemoTitle>
+            <DemoCopy>
+              Reviewing the project? Use the demo account to explore the app immediately.
+            </DemoCopy>
+            <DemoButton type="button" onClick={handleDemoLogin} disabled={isSubmitting}>
+              Continue as Demo User
+            </DemoButton>
+          </DemoPanel>
           <Input
             type="email"
             placeholder="Email Address"
@@ -258,7 +333,9 @@ const LoginPage = () => {
               {showPassword ? <FiEyeOff /> : <FiEye />} {/* Toggle icon */}
             </PasswordToggleButton>
           </PasswordInputContainer>
-          <GhostButton type="submit">Login</GhostButton>
+          <GhostButton type="submit" disabled={isSubmitting}>
+            {isSubmitting ? 'Signing In...' : 'Login'}
+          </GhostButton>
           <LinksContainer>
             <StyledLink to="/signup">Create Account</StyledLink>
             <StyledLink to="/forgot-password">Forgot Password?</StyledLink>
