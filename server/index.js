@@ -75,6 +75,53 @@ const dbRun = async (query, params = []) => {
     };
 };
 
+const ensureInitialAdmin = async () => {
+    const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+    const adminPassword = process.env.ADMIN_PASSWORD;
+    const adminName = process.env.ADMIN_NAME?.trim() || "Admin";
+
+    if (!adminEmail || !adminPassword) {
+        return;
+    }
+
+    const existingAdmin = await dbGet(sql`
+        SELECT id FROM students
+        WHERE LOWER(email) = ${adminEmail}
+    `);
+
+    if (existingAdmin) {
+        await dbRun(
+            "UPDATE students SET role = $1, approval_status = $2 WHERE id = $3",
+            ["admin", "approved", existingAdmin.id],
+        );
+        return;
+    }
+
+    const hashedPassword = await bcrypt.hash(adminPassword, 10);
+    const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(adminName)}&background=random`;
+
+    await dbRun(sql`
+        INSERT INTO students (
+            name,
+            email,
+            password,
+            avatar_url,
+            about_me,
+            role,
+            approval_status
+        )
+        VALUES (
+            ${adminName},
+            ${adminEmail},
+            ${hashedPassword},
+            ${avatarUrl},
+            ${"Admin account"},
+            ${"admin"},
+            ${"approved"}
+        )
+    `);
+};
+
 const createNotification = async (userId, message, linkUrl = null) => {
     if (!userId || !message) return;
     await dbRun(
@@ -1716,6 +1763,7 @@ if (process.env.NODE_ENV === "production") {
 const startServer = async () => {
     try {
         await initializeDatabase();
+        await ensureInitialAdmin();
         console.log("Database schema initialization complete.");
     } catch (error) {
         console.error("Database schema initialization failed:", error.message);
