@@ -1449,6 +1449,8 @@ app.delete("/api/comments/:id", authenticateToken, async (req, res) => {
 app.post("/api/comments/:id/like", authenticateToken, async (req, res) => {
     const { id: commentId } = req.params;
     const userId = req.user.id;
+    const desiredLiked =
+        typeof req.body?.liked === "boolean" ? req.body.liked : null;
 
     try {
         const existingLike = await dbGet(
@@ -1456,27 +1458,36 @@ app.post("/api/comments/:id/like", authenticateToken, async (req, res) => {
             [userId, commentId],
         );
 
-        if (existingLike) {
+        const shouldLike =
+            desiredLiked === null ? !Boolean(existingLike) : desiredLiked;
+
+        if (existingLike && !shouldLike) {
             await dbRun(
                 "DELETE FROM comment_likes WHERE user_id = $1 AND comment_id = $2",
                 [userId, commentId],
             );
-            await dbRun("UPDATE comments SET likes = likes - 1 WHERE id = $1", [
-                commentId,
-            ]);
-        } else {
+        } else if (!existingLike && shouldLike) {
             await dbRun(
                 "INSERT INTO comment_likes (user_id, comment_id) VALUES ($1, $2)",
                 [userId, commentId],
             );
-            await dbRun("UPDATE comments SET likes = likes + 1 WHERE id = $1", [
-                commentId,
-            ]);
         }
+
+        await dbRun(
+            `UPDATE comments
+             SET likes = (
+                 SELECT COUNT(*)
+                 FROM comment_likes
+                 WHERE comment_id = $1
+             )
+             WHERE id = $1`,
+            [commentId],
+        );
 
         const updatedComment = await dbGet(
             `SELECT 
-                c.id, c.user_id, c.content, c.created_at, c.likes,
+                c.id, c.user_id, c.content, c.created_at,
+                (SELECT COUNT(*) FROM comment_likes cl WHERE cl.comment_id = c.id) AS likes,
                 s.name AS user_name, s.avatar_url AS user_avatar,
                 CASE WHEN EXISTS (
                     SELECT 1 FROM comment_likes WHERE user_id = $1 AND comment_id = c.id

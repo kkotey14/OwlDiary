@@ -632,16 +632,10 @@ const PostPage = () => {
     const targetComment = comments.find((c) => c.id === commentId);
     if (!targetComment) return;
 
-    const previousLiked = targetComment.isLiked === 1;
-    const previousLikes = targetComment.likes || 0;
-    const nextLiked = !previousLiked;
-    const nextLikes = Math.max(0, previousLikes + (nextLiked ? 1 : -1));
+    const nextLiked = targetComment.isLiked === 1 ? false : true;
 
     commentLikeLocksRef.current[commentId] = true;
     setCommentLikePending((prev) => ({ ...prev, [commentId]: true }));
-    setComments((prev) =>
-      prev.map((c) => (c.id === commentId ? { ...c, likes: nextLikes, isLiked: nextLiked ? 1 : 0 } : c))
-    );
 
     try {
         const res = await fetch(`/api/comments/${commentId}/like`, {
@@ -650,21 +644,20 @@ const PostPage = () => {
                 'Content-Type': 'application/json',
                 Authorization: `Bearer ${token}`,
             },
+            body: JSON.stringify({ liked: nextLiked }),
         });
         if (!res.ok) {
-            setComments((prev) =>
-                prev.map((c) => (c.id === commentId ? { ...c, likes: previousLikes, isLiked: previousLiked ? 1 : 0 } : c))
-            );
             return;
         }
         const updated = await res.json();
         setComments((prev) =>
-            prev.map((c) => (c.id === commentId ? { ...c, likes: updated.likes, isLiked: updated.isLiked } : c))
+            prev.map((c) => (
+              c.id === commentId
+                ? { ...c, likes: Number(updated.likes) || 0, isLiked: updated.isLiked }
+                : c
+            ))
         );
     } catch (err) {
-        setComments((prev) =>
-            prev.map((c) => (c.id === commentId ? { ...c, likes: previousLikes, isLiked: previousLiked ? 1 : 0 } : c))
-        );
         console.error('Error liking comment:', err);
     } finally {
         delete commentLikeLocksRef.current[commentId];
@@ -842,7 +835,7 @@ const handleDeleteComment = async (commentId) => {
                   disabled={!!commentLikePending[comment.id]}
                   style={{ fontSize: '0.8rem' }}
                 >
-                  <FiHeart />
+                  <FilledHeart $active={comment.isLiked === 1} />
                   <span>{comment.likes || 0}</span>
                 </EngagementBtn>
                 {String(currentUserId) === String(comment.user_id) && (
