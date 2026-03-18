@@ -569,6 +569,8 @@ app.post(
 app.post("/api/posts/:id/like", authenticateToken, async (req, res) => {
     const { id: postId } = req.params;
     const userId = req.user.id;
+    const desiredLiked =
+        typeof req.body?.liked === "boolean" ? req.body.liked : null;
 
     try {
         const postOwner = await dbGet(
@@ -584,12 +586,15 @@ app.post("/api/posts/:id/like", authenticateToken, async (req, res) => {
             [userId, postId],
         );
 
-        if (existingLike) {
+        const shouldLike =
+            desiredLiked === null ? !Boolean(existingLike) : desiredLiked;
+
+        if (existingLike && !shouldLike) {
             await dbRun(
                 "DELETE FROM likes WHERE user_id = $1 AND post_id = $2",
                 [userId, postId],
             );
-        } else {
+        } else if (!existingLike && shouldLike) {
             await dbRun(
                 "INSERT INTO likes (user_id, post_id) VALUES ($1, $2)",
                 [userId, postId],

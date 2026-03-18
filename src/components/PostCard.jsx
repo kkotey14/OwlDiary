@@ -2,11 +2,11 @@ import React, { useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
 import { FiHeart, FiMessageSquare } from 'react-icons/fi';
 import { resolveMediaUrl } from '../utils/media';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { getAuthTokenOrLogout, handleAuthFailure } from '../utils/auth';
 import DOMPurify from 'dompurify';
 
-const Card = styled(Link)`
+const Card = styled.article`
   background: white;
   border-radius: 16px;
   padding: 1.5rem;
@@ -15,6 +15,13 @@ const Card = styled(Link)`
   flex-direction: column;
   gap: 1rem;
   opacity: ${(props) => (props.$isHidden ? 0.6 : 1)};
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
+  }
 `;
 
 const HeaderRow = styled.div`
@@ -98,13 +105,10 @@ const EngagementIcon = styled.div`
   gap: 0.5rem;
   cursor: pointer;
   transition: color 0.3s;
-
-  &.liked {
-    color: red;
-  }
+  color: ${(props) => (props.$isLiked ? '#dc2626' : '#888')};
 
   &:hover {
-    color: var(--primary-teal);
+    color: ${(props) => (props.$isLiked ? '#dc2626' : 'var(--primary-teal)')};
   }
 `;
 
@@ -145,7 +149,9 @@ const HiddenBadge = styled.span`
 `;
 
 const StyledFiHeart = styled(FiHeart)`
-  color: ${(props) => (props.$isLiked ? 'red' : 'currentColor')};
+  color: currentColor;
+  fill: ${(props) => (props.$isLiked ? 'currentColor' : 'transparent')};
+  stroke-width: 2.15px;
   transition: color 0.3s;
 `;
 
@@ -185,6 +191,7 @@ const PostCard = ({
   const canComment = typeof onCommentClick === 'function';
   const isHidden = post.is_hidden === 1 || post.is_hidden === true;
   const postFont = post.post_font_family || 'inherit';
+  const postHref = `/post/${post.id}`;
 
   useEffect(() => {
     if (isLikePending) return;
@@ -219,6 +226,7 @@ const PostCard = ({
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
+        body: JSON.stringify({ liked: nextLiked }),
       });
 
       if (!response.ok) {
@@ -253,8 +261,25 @@ const PostCard = ({
 
   const getMediaUrl = (url) => resolveMediaUrl(url);
 
+  const handleCardClick = () => {
+    navigate(postHref);
+  };
+
+  const handleCardKeyDown = (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      navigate(postHref);
+    }
+  };
+
   return (
-    <Card to={`/post/${post.id}`} id={`post-${post.id}`} $isHidden={isHidden}>
+    <Card
+      id={`post-${post.id}`}
+      $isHidden={isHidden}
+      onClick={handleCardClick}
+      onKeyDown={handleCardKeyDown}
+      role="link"
+      tabIndex={0}>
       <HeaderRow>
         <AuthorInfo>
           <Avatar src={resolveMediaUrl(post.student_avatar)} alt={post.student_name} />
@@ -319,7 +344,10 @@ const PostCard = ({
         <ReadMore>[CLICK TO READ MORE]</ReadMore>
       </div>
       <EngagementBar>
-        <EngagementIcon onClick={handleLike} style={{ opacity: isLikePending ? 0.7 : 1 }}>
+        <EngagementIcon
+          onClick={handleLike}
+          $isLiked={isLiked}
+          style={{ opacity: isLikePending ? 0.7 : 1 }}>
           <StyledFiHeart $isLiked={isLiked} />
           <span>{currentLikes}</span>
         </EngagementIcon>
@@ -328,7 +356,7 @@ const PostCard = ({
             e.preventDefault();
             e.stopPropagation();
             if (canComment) onCommentClick(post.id);
-            navigate(`/post/${post.id}#comments`);
+            navigate(`${postHref}#comments`);
           }}>
           <FiMessageSquare />
           <span>{post.comment_count || 0}</span>

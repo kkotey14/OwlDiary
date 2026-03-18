@@ -142,20 +142,25 @@ const EngagementBtn = styled.button`
   background: none;
   border: none;
   cursor: pointer;
-  color: ${(props) => (props.$active ? 'red' : '#888')};
+  color: ${(props) => (props.$active ? '#dc2626' : '#888')};
   font-size: 0.95rem;
   padding: 0;
   transition: color 0.2s;
 
 
   &:hover {
-    color: var(--primary-teal);
+    color: ${(props) => (props.$active ? '#dc2626' : 'var(--primary-teal)')};
   }
 
   &:disabled {
     opacity: 0.65;
     cursor: not-allowed;
   }
+`;
+
+const FilledHeart = styled(FiHeart)`
+  fill: ${(props) => (props.$active ? 'currentColor' : 'transparent')};
+  stroke-width: 2.15px;
 `;
 
 
@@ -562,6 +567,7 @@ const PostPage = () => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
+        body: JSON.stringify({ liked: nextLiked }),
       });
 
 
@@ -788,7 +794,7 @@ const handleDeleteComment = async (commentId) => {
 
         <EngagementBar>
           <EngagementBtn $active={isLiked} onClick={handleLike} disabled={isPostLikePending}>
-            <FiHeart />
+            <FilledHeart $active={isLiked} />
             <span>{likeCount}</span>
           </EngagementBtn>
           <EngagementBtn as="span">
