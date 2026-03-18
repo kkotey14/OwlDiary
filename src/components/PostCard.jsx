@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
 import { FiHeart, FiMessageSquare } from 'react-icons/fi';
 import { resolveMediaUrl } from '../utils/media';
@@ -177,14 +177,20 @@ const PostCard = ({
   canMoveDown,
   showMoveButtons = true,
 }) => {
-  const [currentLikes, setCurrentLikes] = useState(post.likes);
-  const [isLiked, setIsLiked] = useState(post.isLiked === 1);
+  const [currentLikes, setCurrentLikes] = useState(Number(post.likes) || 0);
+  const [isLiked, setIsLiked] = useState(post.isLiked === 1 || post.isLiked === true);
   const [isLikePending, setIsLikePending] = useState(false);
   const likeRequestLockRef = useRef(false);
   const navigate = useNavigate();
   const canComment = typeof onCommentClick === 'function';
   const isHidden = post.is_hidden === 1 || post.is_hidden === true;
   const postFont = post.post_font_family || 'inherit';
+
+  useEffect(() => {
+    if (isLikePending) return;
+    setCurrentLikes(Number(post.likes) || 0);
+    setIsLiked(post.isLiked === 1 || post.isLiked === true);
+  }, [post.likes, post.isLiked, isLikePending]);
 
   const handleLike = async (e) => {
     e.preventDefault();
@@ -197,7 +203,7 @@ const PostCard = ({
     }
 
     const previousLiked = isLiked;
-    const previousLikes = currentLikes;
+    const previousLikes = Number(currentLikes) || 0;
     const nextLiked = !previousLiked;
     const nextLikes = Math.max(0, previousLikes + (nextLiked ? 1 : -1));
 
@@ -227,8 +233,8 @@ const PostCard = ({
 
       const updatedPost = await response.json();
 
-      setCurrentLikes(updatedPost.likes);
-      setIsLiked(!!updatedPost.isLiked);
+      setCurrentLikes(Number(updatedPost.likes) || 0);
+      setIsLiked(updatedPost.isLiked === 1 || updatedPost.isLiked === true);
       if (onLikeSuccess) {
         onLikeSuccess(updatedPost);
       }

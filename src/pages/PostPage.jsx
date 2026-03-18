@@ -462,8 +462,8 @@ const PostPage = () => {
           const postData = await postRes.json();
           if (!isMounted) return;
           setPost(postData);
-          setIsLiked(postData.isLiked === 1);
-          setLikeCount(postData.likes);
+          setIsLiked(postData.isLiked === 1 || postData.isLiked === true);
+          setLikeCount(Number(postData.likes) || 0);
         } catch (err) {
           if (isMounted) {
             setError(err.message);
@@ -546,7 +546,7 @@ const PostPage = () => {
     if (!token) return;
 
     const previousLiked = isLiked;
-    const previousLikeCount = likeCount;
+    const previousLikeCount = Number(likeCount) || 0;
     const nextLiked = !previousLiked;
     const nextLikeCount = Math.max(0, previousLikeCount + (nextLiked ? 1 : -1));
 
@@ -578,8 +578,8 @@ const PostPage = () => {
 
 
       const updated = await res.json();
-      setIsLiked(!!updated.isLiked);
-      setLikeCount(updated.likes);
+      setIsLiked(updated.isLiked === 1 || updated.isLiked === true);
+      setLikeCount(Number(updated.likes) || 0);
     } catch (err) {
       setIsLiked(previousLiked);
       setLikeCount(previousLikeCount);

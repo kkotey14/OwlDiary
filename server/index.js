@@ -489,7 +489,10 @@ app.get("/api/user-stats/:userId", authenticateToken, async (req, res) => {
         `);
 
         const receivedLikesCount = await dbGet(sql`
-            SELECT SUM(likes) as count FROM posts WHERE student_id = ${userId}
+            SELECT COUNT(*) as count
+            FROM likes l
+            JOIN posts p ON p.id = l.post_id
+            WHERE p.student_id = ${userId}
         `);
 
         const userProfile = await dbGet(sql`
@@ -543,8 +546,10 @@ app.post(
             const newPostId = result.lastID;
 
             const newPost = await dbGet(
-                `SELECT 
-                p.id, p.title, p.content, p.post_type, p.likes, p.created_at, p.media_url,
+            `SELECT 
+                p.id, p.title, p.content, p.post_type,
+                (SELECT COUNT(*) FROM likes pl WHERE pl.post_id = p.id) AS likes,
+                p.created_at, p.media_url,
                 p.is_hidden, p.display_order, p.post_font_family,
                 s.name as student_name, s.avatar_url as student_avatar
             FROM posts p
@@ -584,17 +589,11 @@ app.post("/api/posts/:id/like", authenticateToken, async (req, res) => {
                 "DELETE FROM likes WHERE user_id = $1 AND post_id = $2",
                 [userId, postId],
             );
-            await dbRun("UPDATE posts SET likes = likes - 1 WHERE id = $1", [
-                postId,
-            ]);
         } else {
             await dbRun(
                 "INSERT INTO likes (user_id, post_id) VALUES ($1, $2)",
                 [userId, postId],
             );
-            await dbRun("UPDATE posts SET likes = likes + 1 WHERE id = $1", [
-                postId,
-            ]);
             if (Number(postOwner.student_id) !== Number(userId)) {
                 const actor = await dbGet(
                     "SELECT name FROM students WHERE id = $1",
@@ -608,9 +607,22 @@ app.post("/api/posts/:id/like", authenticateToken, async (req, res) => {
             }
         }
 
+        await dbRun(
+            `UPDATE posts
+             SET likes = (
+                 SELECT COUNT(*)
+                 FROM likes
+                 WHERE post_id = $1
+             )
+             WHERE id = $1`,
+            [postId],
+        );
+
         const updatedPost = await dbGet(
             `SELECT 
-                p.id, p.title, p.content, p.post_type, p.likes, p.created_at, p.media_url,
+                p.id, p.title, p.content, p.post_type,
+                (SELECT COUNT(*) FROM likes pl WHERE pl.post_id = p.id) AS likes,
+                p.created_at, p.media_url,
                 p.is_hidden, p.display_order, p.post_font_family,
                 s.name as student_name, s.avatar_url as student_avatar,
                 CASE WHEN EXISTS (SELECT 1 FROM likes WHERE user_id = $1 AND post_id = p.id) THEN 1 ELSE 0 END AS isLiked,
@@ -667,7 +679,9 @@ app.put("/api/posts/:id", authenticateToken, async (req, res) => {
 
         const updatedPost = await dbGet(
             `SELECT 
-                p.id, p.title, p.content, p.post_type, p.likes, p.created_at, p.media_url,
+                p.id, p.title, p.content, p.post_type,
+                (SELECT COUNT(*) FROM likes pl WHERE pl.post_id = p.id) AS likes,
+                p.created_at, p.media_url,
                 p.is_hidden, p.display_order, p.post_font_family,
                 s.name as student_name, s.avatar_url as student_avatar,
                 CASE WHEN EXISTS (SELECT 1 FROM likes WHERE user_id = $1 AND post_id = p.id) THEN 1 ELSE 0 END AS isLiked,
@@ -1053,7 +1067,9 @@ app.get("/api/posts/:id", authenticateToken, async (req, res) => {
     try {
         const post = await dbGet(
             `SELECT 
-                p.id, p.student_id, p.title, p.content, p.post_type, p.likes, p.created_at, p.media_url,
+                p.id, p.student_id, p.title, p.content, p.post_type,
+                (SELECT COUNT(*) FROM likes pl WHERE pl.post_id = p.id) AS likes,
+                p.created_at, p.media_url,
                 p.is_hidden, p.display_order, p.post_font_family,
                 s.name as student_name, s.avatar_url as student_avatar,
                 CASE WHEN EXISTS (SELECT 1 FROM likes WHERE user_id = $1 AND post_id = p.id) THEN 1 ELSE 0 END AS isLiked,
@@ -1080,7 +1096,9 @@ app.get("/api/posts", authenticateToken, async (req, res) => {
     try {
         const posts = await dbAll(
             `SELECT 
-                p.id, p.student_id, p.title, p.content, p.post_type, p.likes, p.created_at, p.media_url,
+                p.id, p.student_id, p.title, p.content, p.post_type,
+                (SELECT COUNT(*) FROM likes pl WHERE pl.post_id = p.id) AS likes,
+                p.created_at, p.media_url,
                 p.is_hidden, p.display_order, p.post_font_family,
                 s.name as student_name, s.avatar_url as student_avatar,
                 CASE WHEN l.user_id IS NOT NULL THEN 1 ELSE 0 END AS isLiked,
@@ -1327,9 +1345,15 @@ app.get("/api/students/:id/posts", async (req, res) => {
     const isOwner = requesterId && String(requesterId) === String(id);
     const querySql = `
         SELECT 
-            p.id, p.title, p.content, p.post_type, p.likes, p.created_at, p.media_url,
+            p.id, p.title, p.content, p.post_type,
+            (SELECT COUNT(*) FROM likes pl WHERE pl.post_id = p.id) AS likes,
+            p.created_at, p.media_url,
             p.is_hidden, p.display_order, p.post_font_family,
             s.name as student_name, s.avatar_url as student_avatar,
+            CASE WHEN EXISTS (
+                SELECT 1 FROM likes l
+                WHERE l.user_id = $2 AND l.post_id = p.id
+            ) THEN 1 ELSE 0 END AS isLiked,
             (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) AS comment_count
         FROM posts p
         JOIN students s ON p.student_id = s.id
@@ -1340,7 +1364,7 @@ app.get("/api/students/:id/posts", async (req, res) => {
                  p.created_at DESC
     `;
     try {
-        const rows = await dbAll(querySql, [id]);
+        const rows = await dbAll(querySql, [id, requesterId || 0]);
         return res.json(rows);
     } catch (error) {
         return res.status(500).json({ error: error.message });
