@@ -148,6 +148,13 @@ async function resetDemoUser() {
 
             await tx`DELETE FROM notifications WHERE user_id = ${demoUserId}`;
             await tx`DELETE FROM likes WHERE user_id = ${demoUserId}`;
+            await tx`
+                DELETE FROM comment_likes
+                WHERE user_id = ${demoUserId}
+                   OR comment_id IN (
+                        SELECT id FROM comments WHERE user_id = ${demoUserId}
+                   )
+            `;
             await tx`DELETE FROM comments WHERE user_id = ${demoUserId}`;
             await tx`DELETE FROM social_links WHERE student_id = ${demoUserId}`;
             await tx`DELETE FROM profile_gallery WHERE student_id = ${demoUserId}`;
