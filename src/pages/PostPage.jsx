@@ -403,6 +403,14 @@ const formatDate = (dateStr) => {
   });
 };
 
+const isLikedValue = (value) => value === 1 || value === '1' || value === true;
+
+const normalizeComment = (comment) => ({
+  ...comment,
+  likes: Number(comment?.likes) || 0,
+  isLiked: isLikedValue(comment?.isLiked) ? 1 : 0,
+});
+
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -493,7 +501,9 @@ const PostPage = () => {
           }
           const commentsData = await commentsRes.json();
           if (!isMounted) return;
-          setComments(Array.isArray(commentsData) ? commentsData : []);
+          setComments(
+            Array.isArray(commentsData) ? commentsData.map(normalizeComment) : []
+          );
         } catch (err) {
           if (isMounted) {
             setCommentError(err.message);
@@ -635,7 +645,7 @@ const PostPage = () => {
     const targetComment = comments.find((c) => c.id === commentId);
     if (!targetComment) return;
 
-    const nextLiked = targetComment.isLiked === 1 ? false : true;
+    const nextLiked = !isLikedValue(targetComment.isLiked);
 
     commentLikeLocksRef.current[commentId] = true;
     setCommentLikePending((prev) => ({ ...prev, [commentId]: true }));
@@ -656,7 +666,7 @@ const PostPage = () => {
         setComments((prev) =>
             prev.map((c) => (
               c.id === commentId
-                ? { ...c, likes: Number(updated.likes) || 0, isLiked: updated.isLiked }
+                ? normalizeComment({ ...c, ...updated })
                 : c
             ))
         );
@@ -834,12 +844,12 @@ const handleDeleteComment = async (commentId) => {
               )}
               <CommentActions>
                 <EngagementBtn
-                  $active={comment.isLiked === 1}
+                  $active={isLikedValue(comment.isLiked)}
                   onClick={() => handleCommentLike(comment.id)}
                   disabled={!!commentLikePending[comment.id]}
                   style={{ fontSize: '0.8rem' }}
                 >
-                  <FilledHeart $active={comment.isLiked === 1} />
+                  <FilledHeart $active={isLikedValue(comment.isLiked)} />
                   <span>{comment.likes || 0}</span>
                 </EngagementBtn>
                 {String(currentUserId) === String(comment.user_id) && (
