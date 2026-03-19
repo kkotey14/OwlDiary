@@ -484,15 +484,28 @@ app.get("/api/user-stats/:userId", authenticateToken, async (req, res) => {
             SELECT COUNT(*) as count FROM comments WHERE user_id = ${userId}
         `);
 
-        const likesCountResult = await dbGet(sql`
+        const postLikesGivenResult = await dbGet(sql`
             SELECT COUNT(*) as count FROM likes WHERE user_id = ${userId}
         `);
 
+        const commentLikesGivenResult = await dbGet(sql`
+            SELECT COUNT(*) as count FROM comment_likes WHERE user_id = ${userId}
+        `);
+
         const receivedLikesCount = await dbGet(sql`
-            SELECT COUNT(*) as count
-            FROM likes l
-            JOIN posts p ON p.id = l.post_id
-            WHERE p.student_id = ${userId}
+            SELECT
+                (
+                    SELECT COUNT(*)
+                    FROM likes l
+                    JOIN posts p ON p.id = l.post_id
+                    WHERE p.student_id = ${userId}
+                ) +
+                (
+                    SELECT COUNT(*)
+                    FROM comment_likes cl
+                    JOIN comments c ON c.id = cl.comment_id
+                    WHERE c.user_id = ${userId}
+                ) AS count
         `);
 
         const userProfile = await dbGet(sql`
@@ -502,7 +515,9 @@ app.get("/api/user-stats/:userId", authenticateToken, async (req, res) => {
         return res.json({
             posts: parseInt(postsCount?.count) || 0,
             comments: parseInt(commentsCount?.count) || 0,
-            likes: parseInt(likesCountResult?.count) || 0,
+            likes:
+                (parseInt(postLikesGivenResult?.count) || 0) +
+                (parseInt(commentLikesGivenResult?.count) || 0),
             receivedLikes: parseInt(receivedLikesCount?.count) || 0,
             avatar_url: userProfile?.avatar_url || null,
             name: userProfile?.name || null,
