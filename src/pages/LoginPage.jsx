@@ -69,7 +69,8 @@ const FeaturedQuote = styled.blockquote`
   font-style: italic;
   color: rgba(15, 23, 42, 0.9);
   max-width: 300px;
-  margin-top: 1.5rem;
+  margin-top: 0.8rem;
+  margin-bottom: 0;
   line-height: 1.5;
 `;
 
@@ -77,7 +78,7 @@ const AnimationWrap = styled.div`
   width: min(420px, 82vw);
   aspect-ratio: 1 / 1;
   min-height: 320px;
-  margin-bottom: -1.8rem;
+  margin-bottom: -3.2rem;
   filter: drop-shadow(0 14px 30px rgba(15, 23, 42, 0.14));
   display: grid;
   place-items: center;
@@ -89,9 +90,10 @@ const EditorialSection = styled.div`
   flex-direction: column;
   justify-content: center;
   align-items: flex-start;
+  gap: 0.1rem;
   padding-left: 10%;
   position: relative;
-  transform: translateY(-5rem);
+  transform: translateY(-4.8rem);
   z-index: 2;
 `;
 
@@ -102,6 +104,7 @@ const WelcomeMessage = styled.h1`
   line-height: 1.1;
   color: #0f172a;
   margin: 0;
+  margin-top: -4.6rem;
 
   span {
     font-size: 7rem;
@@ -203,6 +206,13 @@ const DemoCopy = styled.p`
   font-size: 0.95rem;
   line-height: 1.5;
   color: rgba(15, 23, 42, 0.85);
+`;
+
+const DemoNote = styled.p`
+  margin: 0;
+  font-size: 0.83rem;
+  line-height: 1.45;
+  color: rgba(15, 23, 42, 0.68);
 `;
 
 const DemoButton = styled.button`
@@ -312,6 +322,9 @@ const LoginPage = () => {
             <DemoCopy>
               Reviewing the project? This signs you into a preloaded sample account so you can explore the app immediately.
             </DemoCopy>
+            <DemoNote>
+              This shared demo account resets automatically every 12 hours.
+            </DemoNote>
             <DemoButton type="button" onClick={handleDemoLogin} disabled={isSubmitting}>
               Continue as Demo User
             </DemoButton>
