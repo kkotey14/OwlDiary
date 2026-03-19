@@ -20,12 +20,15 @@ const Content = styled.main`
 function App() {
   const [showCreatePostModal, setShowCreatePostModal] = useState(false);
   const [postsRefreshTrigger, setPostsRefreshTrigger] = useState(0);
+  const [statsRefreshTrigger, setStatsRefreshTrigger] = useState(0);
 
   const openCreatePost = () => setShowCreatePostModal(true);
   const closeCreatePost = () => setShowCreatePostModal(false);
   const handlePostCreated = () => {
     setPostsRefreshTrigger((prev) => prev + 1);
+    setStatsRefreshTrigger((prev) => prev + 1);
   };
+  const refreshStats = () => setStatsRefreshTrigger((prev) => prev + 1);
 
   return (
     <>
@@ -33,7 +36,7 @@ function App() {
       <AppContainer>
         <Sidebar onCreatePost={openCreatePost} />
         <Content>
-          <Outlet context={{ postsRefreshTrigger }} />
+          <Outlet context={{ postsRefreshTrigger, statsRefreshTrigger, refreshStats }} />
         </Content>
       </AppContainer>
       {showCreatePostModal && (

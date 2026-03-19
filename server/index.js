@@ -849,17 +849,24 @@ app.delete("/api/posts/:id", authenticateToken, async (req, res) => {
 
 app.get("/api/posts/:id/comments", authenticateToken, async (req, res) => {
     const { id: postId } = req.params;
+    const userId = req.user.id;
 
     try {
         const comments = await dbAll(
             `SELECT 
                 c.id, c.user_id, c.content, c.created_at,
-                s.name AS user_name, s.avatar_url AS user_avatar
+                (SELECT COUNT(*) FROM comment_likes cl WHERE cl.comment_id = c.id) AS likes,
+                s.name AS user_name, s.avatar_url AS user_avatar,
+                CASE WHEN EXISTS (
+                    SELECT 1
+                    FROM comment_likes cl
+                    WHERE cl.user_id = $1 AND cl.comment_id = c.id
+                ) THEN 1 ELSE 0 END AS "isLiked"
             FROM comments c
             JOIN students s ON c.user_id = s.id
-            WHERE c.post_id = $1
+            WHERE c.post_id = $2
             ORDER BY c.created_at ASC`,
-            [postId],
+            [userId, postId],
         );
 
         return res.json(comments);

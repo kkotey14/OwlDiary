@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import styled from 'styled-components';
 import { useOutletContext } from 'react-router-dom';
 import ActivityFeed from '../components/ActivityFeed';
@@ -41,13 +41,10 @@ const Sidebar = styled.div`
 `;
 
 const Dashboard = () => {
-  const [statsRefreshTrigger, setStatsRefreshTrigger] = useState(0);
   const outletContext = useOutletContext();
   const postsRefreshTrigger = outletContext ? outletContext.postsRefreshTrigger : 0;
-
-  const fetchStats = () => {
-    setStatsRefreshTrigger(prev => prev + 1);
-  };
+  const statsRefreshTrigger = outletContext ? outletContext.statsRefreshTrigger : 0;
+  const fetchStats = outletContext?.refreshStats || (() => {});
 
   return (
     <DashboardPage>

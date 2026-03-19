@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link, useOutletContext } from 'react-router-dom';
 import styled from 'styled-components';
 import { FiHeart, FiMessageSquare, FiArrowLeft, FiEdit2, FiTrash2 } from 'react-icons/fi';
 import { resolveMediaUrl } from '../utils/media';
@@ -410,6 +410,8 @@ const formatDate = (dateStr) => {
 const PostPage = () => {
   const { postId } = useParams();
   const navigate = useNavigate();
+  const outletContext = useOutletContext();
+  const refreshStats = outletContext?.refreshStats || (() => {});
 
 
   const [post, setPost] = useState(null);
@@ -577,6 +579,7 @@ const PostPage = () => {
       const updated = await res.json();
       setIsLiked(updated.isLiked === 1 || updated.isLiked === true);
       setLikeCount(Number(updated.likes) || 0);
+      refreshStats();
     } catch (err) {
       console.error('Error toggling like:', err);
     } finally {
@@ -657,6 +660,7 @@ const PostPage = () => {
                 : c
             ))
         );
+        refreshStats();
     } catch (err) {
         console.error('Error liking comment:', err);
     } finally {
