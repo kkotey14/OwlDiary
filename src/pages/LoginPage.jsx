@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { FiEye, FiEyeOff } from 'react-icons/fi'; // Import eye icons
 import Lottie from 'lottie-react';
 import owlsAnimation from '../assets/owls-animation.json';
+import { fetchWithTimeout } from '../utils/fetchWithTimeout';
 
 const Input = styled.input`
   padding: 1rem 1.25rem;
@@ -255,7 +256,7 @@ const LoginPage = () => {
     setIsSubmitting(true);
 
     try {
-      const response = await fetch('/api/login', {
+      const response = await fetchWithTimeout('/api/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -285,7 +286,11 @@ const LoginPage = () => {
       }
     } catch (error) {
       const isNetworkFailure = error instanceof TypeError;
-      setError(isNetworkFailure ? 'Cannot reach server. Ensure backend is running on port 5050.' : error.message);
+      setError(
+        isNetworkFailure
+          ? 'Cannot reach server. Ensure backend is running on port 5050.'
+          : error.message,
+      );
     } finally {
       setIsSubmitting(false);
     }
