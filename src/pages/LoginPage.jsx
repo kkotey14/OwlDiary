@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
 import { Link, useNavigate } from 'react-router-dom';
 import { FiEye, FiEyeOff } from 'react-icons/fi'; // Import eye icons
@@ -242,6 +242,8 @@ const DemoButton = styled.button`
 
 const DEMO_EMAIL = 'maya.thompson@owldiary.demo';
 const DEMO_PASSWORD = 'Password123!';
+const LOGIN_TIMEOUT_MS = 65000;
+const WARMUP_TIMEOUT_MS = 70000;
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
@@ -249,20 +251,65 @@ const LoginPage = () => {
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false); // New state for password visibility
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isBackendReady, setIsBackendReady] = useState(false);
+  const [isWarmingBackend, setIsWarmingBackend] = useState(true);
   const navigate = useNavigate();
+  const backendWarmupPromiseRef = useRef(null);
+
+  const warmBackend = async () => {
+    if (!backendWarmupPromiseRef.current) {
+      setIsWarmingBackend(true);
+      backendWarmupPromiseRef.current = fetchWithTimeout(
+        '/api/health',
+        {
+          method: 'GET',
+          cache: 'no-store',
+        },
+        WARMUP_TIMEOUT_MS,
+      )
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error('Backend warmup failed.');
+          }
+          setIsBackendReady(true);
+          setError('');
+        })
+        .catch((warmupError) => {
+          setIsBackendReady(false);
+          throw warmupError;
+        })
+        .finally(() => {
+          setIsWarmingBackend(false);
+        });
+    }
+
+    return backendWarmupPromiseRef.current;
+  };
+
+  useEffect(() => {
+    warmBackend().catch(() => {
+      setError('Server is waking up. Try again in a few seconds if login does not start.');
+    });
+  }, []);
 
   const loginUser = async (nextEmail, nextPassword) => {
     setError('');
     setIsSubmitting(true);
 
     try {
-      const response = await fetchWithTimeout('/api/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+      await warmBackend();
+
+      const response = await fetchWithTimeout(
+        '/api/login',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ email: nextEmail, password: nextPassword }),
         },
-        body: JSON.stringify({ email: nextEmail, password: nextPassword }),
-      });
+        LOGIN_TIMEOUT_MS,
+      );
 
       let data;
       if (response.ok) {
@@ -328,10 +375,12 @@ const LoginPage = () => {
               Reviewing the project? This signs you into a preloaded sample account so you can explore the app immediately.
             </DemoCopy>
             <DemoNote>
-              This shared demo account resets automatically every 12 hours.
+              {isWarmingBackend
+                ? 'Waking the server now. First load can take up to a minute after inactivity.'
+                : 'This shared demo account resets automatically every 12 hours.'}
             </DemoNote>
-            <DemoButton type="button" onClick={handleDemoLogin} disabled={isSubmitting}>
-              Continue as Demo User
+            <DemoButton type="button" onClick={handleDemoLogin} disabled={isSubmitting || isWarmingBackend}>
+              {isWarmingBackend ? 'Waking Server...' : isSubmitting ? 'Signing In...' : 'Continue as Demo User'}
             </DemoButton>
           </DemoPanel>
           <Input
@@ -353,8 +402,8 @@ const LoginPage = () => {
               {showPassword ? <FiEyeOff /> : <FiEye />} {/* Toggle icon */}
             </PasswordToggleButton>
           </PasswordInputContainer>
-          <GhostButton type="submit" disabled={isSubmitting}>
-            {isSubmitting ? 'Signing In...' : 'Login'}
+          <GhostButton type="submit" disabled={isSubmitting || (isWarmingBackend && !isBackendReady)}>
+            {isWarmingBackend && !isBackendReady ? 'Waking Server...' : isSubmitting ? 'Signing In...' : 'Login'}
           </GhostButton>
           <LinksContainer>
             <StyledLink to="/signup">Create Account</StyledLink>

@@ -265,6 +265,9 @@ app.use(cors());
 app.use(express.json());
 
 app.use("/uploads", express.static(UPLOADS_DIR));
+app.get("/api/health", (req, res) => {
+    return res.status(200).json({ ok: true });
+});
 app.get("/uploads/:filename", (req, res) => {
     return res
         .status(200)
