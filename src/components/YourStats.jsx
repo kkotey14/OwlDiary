@@ -6,7 +6,6 @@ import { getAuthTokenOrLogout, handleAuthFailure } from '../utils/auth';
 import { resolveMediaUrl } from '../utils/media';
 import BrandedLoader from './BrandedLoader';
 import useMinimumLoadingDelay from '../hooks/useMinimumLoadingDelay';
-import { fetchWithTimeout } from '../utils/fetchWithTimeout';
 
 const StatsContainer = styled.div`
   background: white;
@@ -97,7 +96,7 @@ const YourStats = ({ statsRefreshTrigger }) => {
         const decodedToken = jwtDecode(token);
         const userId = decodedToken.id;
 
-        const response = await fetchWithTimeout(`/api/user-stats/${userId}`, {
+        const response = await fetch(`/api/user-stats/${userId}`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }

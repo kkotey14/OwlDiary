@@ -14,7 +14,6 @@ import { getAuthTokenOrLogout, handleAuthFailure } from "../utils/auth";
 import EditPostModal from './EditPostModal';
 import BrandedLoader from "./BrandedLoader";
 import useMinimumLoadingDelay from "../hooks/useMinimumLoadingDelay";
-import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
 const FeedContainer = styled.div`
     display: flex;
@@ -52,7 +51,7 @@ const ActivityFeed = forwardRef(({ fetchStats, refreshTrigger }, ref) => {
             } catch {
                 setViewer({ id: null, isAdmin: false });
             }
-            const response = await fetchWithTimeout("/api/posts", {
+            const response = await fetch("/api/posts", {
                 headers: {
                     Authorization: `Bearer ${token}`,
                 },
