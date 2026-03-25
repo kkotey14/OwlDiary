@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
 import { Link, useNavigate } from 'react-router-dom';
 import { FiEye, FiEyeOff } from 'react-icons/fi'; // Import eye icons
@@ -184,7 +184,66 @@ const ErrorMessage = styled.p`
   text-align: center;
 `;
 
+const DemoPanel = styled.div`
+  border-radius: 14px;
+  padding: 1rem 1.1rem;
+  background: rgba(15, 23, 42, 0.08);
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+`;
+
+const DemoTitle = styled.div`
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(15, 23, 42, 0.8);
+`;
+
+const DemoCopy = styled.p`
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: rgba(15, 23, 42, 0.85);
+`;
+
+const DemoNote = styled.p`
+  margin: 0;
+  font-size: 0.83rem;
+  line-height: 1.45;
+  color: rgba(15, 23, 42, 0.68);
+`;
+
+const DemoButton = styled.button`
+  padding: 0.95rem 1rem;
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #0f172a 0%, #1d4ed8 100%);
+  color: #ffffff;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 22px rgba(29, 78, 216, 0.22);
+  }
+
+  &:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+  }
+`;
+
+const DEMO_EMAIL = 'maya.thompson@owldiary.demo';
+const DEMO_PASSWORD = 'Password123!';
 const LOGIN_TIMEOUT_MS = 65000;
+const WARMUP_TIMEOUT_MS = 70000;
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
@@ -192,13 +251,54 @@ const LoginPage = () => {
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false); // New state for password visibility
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isBackendReady, setIsBackendReady] = useState(false);
+  const [isWarmingBackend, setIsWarmingBackend] = useState(true);
   const navigate = useNavigate();
+  const backendWarmupPromiseRef = useRef(null);
+
+  const warmBackend = async () => {
+    if (!backendWarmupPromiseRef.current) {
+      setIsWarmingBackend(true);
+      backendWarmupPromiseRef.current = fetchWithTimeout(
+        '/api/health',
+        {
+          method: 'GET',
+          cache: 'no-store',
+        },
+        WARMUP_TIMEOUT_MS,
+      )
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error('Backend warmup failed.');
+          }
+          setIsBackendReady(true);
+          setError('');
+        })
+        .catch((warmupError) => {
+          setIsBackendReady(false);
+          throw warmupError;
+        })
+        .finally(() => {
+          setIsWarmingBackend(false);
+        });
+    }
+
+    return backendWarmupPromiseRef.current;
+  };
+
+  useEffect(() => {
+    warmBackend().catch(() => {
+      setError('Server is waking up. Try again in a few seconds if login does not start.');
+    });
+  }, []);
 
   const loginUser = async (nextEmail, nextPassword) => {
     setError('');
     setIsSubmitting(true);
 
     try {
+      await warmBackend();
+
       const response = await fetchWithTimeout(
         '/api/login',
         {
@@ -248,6 +348,10 @@ const LoginPage = () => {
     await loginUser(email, password);
   };
 
+  const handleDemoLogin = async () => {
+    await loginUser(DEMO_EMAIL, DEMO_PASSWORD);
+  };
+
   return (
     <PageWrapper>
       <EditorialSection>
@@ -265,6 +369,20 @@ const LoginPage = () => {
         <GlassForm onSubmit={handleSubmit}>
           <Title>Login</Title>
           {error && <ErrorMessage>{error}</ErrorMessage>}
+          <DemoPanel>
+            <DemoTitle>Demo Access</DemoTitle>
+            <DemoCopy>
+              Reviewing the project? This signs you into a preloaded sample account so you can explore the app immediately.
+            </DemoCopy>
+            <DemoNote>
+              {isWarmingBackend
+                ? 'Waking the server now. First load can take up to a minute after inactivity.'
+                : 'This shared demo account resets automatically every 12 hours.'}
+            </DemoNote>
+            <DemoButton type="button" onClick={handleDemoLogin} disabled={isSubmitting || isWarmingBackend}>
+              {isWarmingBackend ? 'Waking Server...' : isSubmitting ? 'Signing In...' : 'Continue as Demo User'}
+            </DemoButton>
+          </DemoPanel>
           <Input
             type="email"
             placeholder="Email Address"
@@ -284,8 +402,8 @@ const LoginPage = () => {
               {showPassword ? <FiEyeOff /> : <FiEye />} {/* Toggle icon */}
             </PasswordToggleButton>
           </PasswordInputContainer>
-          <GhostButton type="submit" disabled={isSubmitting}>
-            {isSubmitting ? 'Signing In...' : 'Login'}
+          <GhostButton type="submit" disabled={isSubmitting || (isWarmingBackend && !isBackendReady)}>
+            {isWarmingBackend && !isBackendReady ? 'Waking Server...' : isSubmitting ? 'Signing In...' : 'Login'}
           </GhostButton>
           <LinksContainer>
             <StyledLink to="/signup">Create Account</StyledLink>
