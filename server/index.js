@@ -22,11 +22,15 @@ const DEFAULT_UPLOADS_DIR = path.join(__dirname, "uploads");
 const STARTUP_RETRY_DELAY_MS = Number(
     process.env.STARTUP_RETRY_DELAY_MS || 5000,
 );
+const STARTUP_STEP_TIMEOUT_MS = Number(
+    process.env.STARTUP_STEP_TIMEOUT_MS || 15000,
+);
 
 let UPLOADS_DIR = process.env.UPLOAD_DIR || DEFAULT_UPLOADS_DIR;
 let serverReady = false;
 let startupStatus = "starting";
 let startupError = null;
+let startupStage = "boot";
 try {
     fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 } catch (error) {
@@ -231,7 +235,29 @@ const runCompatibilityMigrations = async () => {
     );
 };
 
+const withTimeout = async (promise, label) => {
+    let timeoutId;
+    try {
+        return await Promise.race([
+            promise,
+            new Promise((_, reject) => {
+                timeoutId = setTimeout(() => {
+                    reject(
+                        new Error(
+                            `${label} timed out after ${STARTUP_STEP_TIMEOUT_MS}ms`,
+                        ),
+                    );
+                }, STARTUP_STEP_TIMEOUT_MS);
+            }),
+        ]);
+    } finally {
+        clearTimeout(timeoutId);
+    }
+};
+
 const initializeDatabase = async () => {
+    startupStage = "checking_students_table";
+    console.log("Checking database connectivity and students table...");
     const tableExists = await sql`
         SELECT EXISTS (
             SELECT FROM information_schema.tables
@@ -240,6 +266,7 @@ const initializeDatabase = async () => {
     `;
 
     if (!tableExists[0].exists) {
+        startupStage = "initializing_schema";
         console.log("Initializing database schema...");
 
         const schema = fs.readFileSync(SCHEMA_PATH, "utf8");
@@ -259,6 +286,8 @@ const initializeDatabase = async () => {
         }
     }
 
+    startupStage = "running_compatibility_migrations";
+    console.log("Running compatibility migrations...");
     await runCompatibilityMigrations();
 };
 
@@ -269,6 +298,7 @@ app.get("/api/health", (req, res) => {
     return res.status(serverReady ? 200 : 503).json({
         status: serverReady ? "ready" : startupStatus,
         ready: serverReady,
+        stage: startupStage,
         error: startupError,
     });
 });
@@ -1848,10 +1878,25 @@ if (process.env.NODE_ENV === "production") {
 const bootstrapDatabase = async () => {
     while (!serverReady) {
         try {
-            await initializeDatabase();
-            await ensureInitialAdmin();
+            startupStatus = "starting";
+            startupError = null;
+
+            startupStage = "initializing_database";
+            await withTimeout(
+                initializeDatabase(),
+                "Database initialization",
+            );
+
+            startupStage = "ensuring_initial_admin";
+            console.log("Ensuring initial admin...");
+            await withTimeout(
+                ensureInitialAdmin(),
+                "Initial admin setup",
+            );
+
             serverReady = true;
             startupStatus = "ready";
+            startupStage = "ready";
             startupError = null;
             console.log("Database schema initialization complete.");
             return;
@@ -1865,7 +1910,6 @@ const bootstrapDatabase = async () => {
             await new Promise((resolve) =>
                 setTimeout(resolve, STARTUP_RETRY_DELAY_MS),
             );
-            startupStatus = "starting";
         }
     }
 };
