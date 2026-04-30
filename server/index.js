@@ -232,40 +232,34 @@ const runCompatibilityMigrations = async () => {
 };
 
 const initializeDatabase = async () => {
-    const originalLog = console.log;
-    console.log = () => {}; // silence logs
-    try {
-        const tableExists = await sql`
-            SELECT EXISTS (
-                SELECT FROM information_schema.tables
-                WHERE table_name = 'students'
-            )
-        `;
+    const tableExists = await sql`
+        SELECT EXISTS (
+            SELECT FROM information_schema.tables
+            WHERE table_name = 'students'
+        )
+    `;
 
-        if (!tableExists[0].exists) {
-            console.log("Initializing database schema...");
+    if (!tableExists[0].exists) {
+        console.log("Initializing database schema...");
 
-            const schema = fs.readFileSync(SCHEMA_PATH, "utf8");
+        const schema = fs.readFileSync(SCHEMA_PATH, "utf8");
 
-            const cleanedSchema = schema
-                .split("\n")
-                .filter((line) => !line.trim().startsWith("--"))
-                .join("\n");
+        const cleanedSchema = schema
+            .split("\n")
+            .filter((line) => !line.trim().startsWith("--"))
+            .join("\n");
 
-            const statements = cleanedSchema
-                .split(/;\s*(?:\n|$)/g)
-                .map((statement) => statement.trim())
-                .filter(Boolean);
+        const statements = cleanedSchema
+            .split(/;\s*(?:\n|$)/g)
+            .map((statement) => statement.trim())
+            .filter(Boolean);
 
-            for (const statement of statements) {
-                await sql.unsafe(statement);
-            }
+        for (const statement of statements) {
+            await sql.unsafe(statement);
         }
-
-        await runCompatibilityMigrations();
-    } finally {
-        console.log = originalLog;
     }
+
+    await runCompatibilityMigrations();
 };
 
 app.use(cors());
@@ -1877,12 +1871,24 @@ const bootstrapDatabase = async () => {
 };
 
 const startServer = () => {
-    app.listen(port, "0.0.0.0", () => {
+    console.error(`Attempting to listen on port ${port}`);
+    const server = app.listen(port, "0.0.0.0", () => {
         console.log(`Server listening on port ${port}`);
+    });
+    server.on("error", (error) => {
+        console.error("Server failed to start:", error);
     });
 
     void bootstrapDatabase();
 };
+
+process.on("unhandledRejection", (error) => {
+    console.error("Unhandled promise rejection:", error);
+});
+
+process.on("uncaughtException", (error) => {
+    console.error("Uncaught exception:", error);
+});
 
 startServer();
 
