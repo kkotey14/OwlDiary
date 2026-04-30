@@ -19,8 +19,14 @@ const port = process.env.PORT || 5050;
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
 const SCHEMA_PATH = path.join(__dirname, "../Database/schema.sql");
 const DEFAULT_UPLOADS_DIR = path.join(__dirname, "uploads");
+const STARTUP_RETRY_DELAY_MS = Number(
+    process.env.STARTUP_RETRY_DELAY_MS || 5000,
+);
 
 let UPLOADS_DIR = process.env.UPLOAD_DIR || DEFAULT_UPLOADS_DIR;
+let serverReady = false;
+let startupStatus = "starting";
+let startupError = null;
 try {
     fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 } catch (error) {
@@ -37,6 +43,7 @@ try {
 // Database setup
 const sql = postgres(process.env.DATABASE_URL, {
     ssl: "require",
+    connect_timeout: 10,
 });
 
 // Helper functions
@@ -263,6 +270,30 @@ const initializeDatabase = async () => {
 
 app.use(cors());
 app.use(express.json());
+
+app.get("/api/health", (req, res) => {
+    return res.status(serverReady ? 200 : 503).json({
+        status: serverReady ? "ready" : startupStatus,
+        ready: serverReady,
+        error: startupError,
+    });
+});
+
+app.use("/api", (req, res, next) => {
+    if (req.path === "/health") {
+        return next();
+    }
+
+    if (!serverReady) {
+        return res.status(503).json({
+            error: startupError
+                ? `Server unavailable: ${startupError}`
+                : "Server is still starting up. Please try again shortly.",
+        });
+    }
+
+    return next();
+});
 
 app.use("/uploads", express.static(UPLOADS_DIR));
 app.get("/uploads/:filename", (req, res) => {
@@ -601,8 +632,7 @@ app.post("/api/posts/:id/like", authenticateToken, async (req, res) => {
             [userId, postId],
         );
 
-        const shouldLike =
-            desiredLiked === null ? !Boolean(existingLike) : desiredLiked;
+        const shouldLike = desiredLiked === null ? !existingLike : desiredLiked;
 
         if (existingLike && !shouldLike) {
             await dbRun(
@@ -1480,8 +1510,7 @@ app.post("/api/comments/:id/like", authenticateToken, async (req, res) => {
             [userId, commentId],
         );
 
-        const shouldLike =
-            desiredLiked === null ? !Boolean(existingLike) : desiredLiked;
+        const shouldLike = desiredLiked === null ? !existingLike : desiredLiked;
 
         if (existingLike && !shouldLike) {
             await dbRun(
@@ -1822,18 +1851,37 @@ if (process.env.NODE_ENV === "production") {
     });
 }
 
-const startServer = async () => {
-    try {
-        await initializeDatabase();
-        await ensureInitialAdmin();
-        console.log("Database schema initialization complete.");
-    } catch (error) {
-        console.error("Database schema initialization failed:", error.message);
+const bootstrapDatabase = async () => {
+    while (!serverReady) {
+        try {
+            await initializeDatabase();
+            await ensureInitialAdmin();
+            serverReady = true;
+            startupStatus = "ready";
+            startupError = null;
+            console.log("Database schema initialization complete.");
+            return;
+        } catch (error) {
+            startupStatus = "error";
+            startupError = error.message;
+            console.error(
+                "Database schema initialization failed:",
+                error.message,
+            );
+            await new Promise((resolve) =>
+                setTimeout(resolve, STARTUP_RETRY_DELAY_MS),
+            );
+            startupStatus = "starting";
+        }
     }
+};
 
+const startServer = () => {
     app.listen(port, "0.0.0.0", () => {
         console.log(`Server listening on port ${port}`);
     });
+
+    void bootstrapDatabase();
 };
 
 startServer();

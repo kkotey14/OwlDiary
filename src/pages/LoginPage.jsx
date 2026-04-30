@@ -241,6 +241,15 @@ const DemoButton = styled.button`
 
 const DEMO_EMAIL = 'maya.thompson@owldiary.demo';
 const DEMO_PASSWORD = 'Password123!';
+const LOGIN_REQUEST_TIMEOUT_MS = 15000;
+
+const getServerUnavailableMessage = () => {
+  if (typeof window !== 'undefined' && !['localhost', '127.0.0.1'].includes(window.location.hostname)) {
+    return 'Cannot reach the login service right now. The deployed backend is unavailable.';
+  }
+
+  return 'Cannot reach server. Ensure backend is running on port 5050.';
+};
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
@@ -253,6 +262,8 @@ const LoginPage = () => {
   const loginUser = async (nextEmail, nextPassword) => {
     setError('');
     setIsSubmitting(true);
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), LOGIN_REQUEST_TIMEOUT_MS);
 
     try {
       const response = await fetch('/api/login', {
@@ -260,6 +271,7 @@ const LoginPage = () => {
         headers: {
           'Content-Type': 'application/json',
         },
+        signal: controller.signal,
         body: JSON.stringify({ email: nextEmail, password: nextPassword }),
       });
 
@@ -284,9 +296,17 @@ const LoginPage = () => {
         throw new Error(errorMessage);
       }
     } catch (error) {
+      const isTimeout = error instanceof DOMException && error.name === 'AbortError';
       const isNetworkFailure = error instanceof TypeError;
-      setError(isNetworkFailure ? 'Cannot reach server. Ensure backend is running on port 5050.' : error.message);
+      setError(
+        isTimeout
+          ? 'Login request timed out. The backend did not respond.'
+          : isNetworkFailure
+            ? getServerUnavailableMessage()
+            : error.message
+      );
     } finally {
+      window.clearTimeout(timeoutId);
       setIsSubmitting(false);
     }
   };
