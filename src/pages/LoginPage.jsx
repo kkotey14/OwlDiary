@@ -4,7 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { FiEye, FiEyeOff } from 'react-icons/fi'; // Import eye icons
 import Lottie from 'lottie-react';
 import owlsAnimation from '../assets/owls-animation.json';
-import { getDemoCredentials, isDemoModeEnabled } from '../demo/mockApi';
+import { getAdminDemoCredentials, getDemoCredentials, isDemoModeEnabled } from '../demo/mockApi';
 import { setStoredAuthToken } from '../utils/auth';
 
 const Input = styled.input`
@@ -249,7 +249,14 @@ const DemoButton = styled.button`
   }
 `;
 
+const DemoButtons = styled.div`
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.65rem;
+`;
+
 const { email: DEMO_EMAIL, password: DEMO_PASSWORD } = getDemoCredentials();
+const { email: ADMIN_DEMO_EMAIL, password: ADMIN_DEMO_PASSWORD } = getAdminDemoCredentials();
 const LOGIN_REQUEST_TIMEOUT_MS = 15000;
 
 const getServerUnavailableMessage = () => {
@@ -325,8 +332,12 @@ const LoginPage = () => {
     await loginUser(email, password);
   };
 
-  const handleDemoLogin = async () => {
+  const handleGuestDemoLogin = async () => {
     await loginUser(DEMO_EMAIL, DEMO_PASSWORD);
+  };
+
+  const handleAdminDemoLogin = async () => {
+    await loginUser(ADMIN_DEMO_EMAIL, ADMIN_DEMO_PASSWORD);
   };
 
   const isDemoMode = isDemoModeEnabled();
@@ -351,14 +362,19 @@ const LoginPage = () => {
           <DemoPanel>
             <DemoTitle>Demo Access</DemoTitle>
             <DemoCopy>
-              Reviewing the project? This signs you into a preloaded sample account so you can explore the app immediately.
+              Reviewing the project? Choose a seeded student account for the everyday experience or the admin account for moderation workflows.
             </DemoCopy>
             <DemoNote>
               This shared demo account resets automatically every refresh or sign out.
             </DemoNote>
-            <DemoButton type="button" onClick={handleDemoLogin} disabled={isSubmitting}>
-              Continue as Demo User
-            </DemoButton>
+            <DemoButtons>
+              <DemoButton type="button" onClick={handleGuestDemoLogin} disabled={isSubmitting}>
+                Continue as Guest Student
+              </DemoButton>
+              <DemoButton type="button" onClick={handleAdminDemoLogin} disabled={isSubmitting}>
+                Continue as Admin
+              </DemoButton>
+            </DemoButtons>
           </DemoPanel>
           {isDemoMode && (
             <DemoSessionWarning>

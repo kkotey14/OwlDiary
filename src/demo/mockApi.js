@@ -1,7 +1,11 @@
 import { DEMO_MODE } from "./config";
 
 const DEMO_EMAIL = "maya.thompson@owldiary.demo";
+const ADMIN_EMAIL = "admin@owldiary.demo";
 const DEMO_PASSWORD = "Password123!";
+const DEMO_USER_ID = 1;
+const ADMIN_USER_ID = 11;
+const PENDING_USER_ID = 12;
 
 const jsonHeaders = {
     "Content-Type": "application/json",
@@ -23,20 +27,44 @@ const createJwtLikeToken = (payload) => {
     ].join(".");
 };
 
-const demoImage = (seed, label) =>
-    `https://ui-avatars.com/api/?name=${encodeURIComponent(label)}&background=${seed}&color=ffffff&size=300`;
+const avatarSvgDataUrl = (seed, label) => {
+    const initials = String(label || "")
+        .trim()
+        .split(/\s+/)
+        .slice(0, 2)
+        .map((part) => part[0] || "")
+        .join("")
+        .toUpperCase();
+    const safeSeed = seed.replace("#", "");
+    const secondary = `${safeSeed}cc`;
+    const svg = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300" role="img" aria-label="${label}">
+            <defs>
+                <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#${safeSeed}" />
+                    <stop offset="100%" stop-color="#${secondary.slice(0, 6)}" />
+                </linearGradient>
+            </defs>
+            <rect width="300" height="300" rx="72" fill="url(#g)" />
+            <circle cx="150" cy="115" r="58" fill="rgba(255,255,255,0.18)" />
+            <path d="M78 244c13-39 42-58 72-58s59 19 72 58" fill="rgba(255,255,255,0.18)" />
+            <text x="150" y="174" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="84" font-weight="700" fill="#ffffff">${initials}</text>
+        </svg>
+    `.replace(/\s+/g, " ").trim();
+    return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+};
 
 const createInitialState = () => {
     const students = [
         {
-            id: 1,
+            id: DEMO_USER_ID,
             name: "Maya Thompson",
             email: DEMO_EMAIL,
             password: DEMO_PASSWORD,
             about_me:
                 "Film club lead, late-night journaler, and the person who always has a campus coffee recommendation ready.",
-            avatar_url: demoImage("1d4ed8", "Maya Thompson"),
-            role: "admin",
+            avatar_url: avatarSvgDataUrl("1d4ed8", "Maya Thompson"),
+            role: "user",
             appearance_theme: "aurora",
             font_family: "Georgia",
             accent_color: "#1d4ed8",
@@ -52,15 +80,15 @@ const createInitialState = () => {
             email: "jordan.ellis@owldiary.demo",
             password: DEMO_PASSWORD,
             about_me:
-                "Writes about basketball, grief, and the weird calm that hits after midnight study sessions.",
-            avatar_url: demoImage("0f766e", "Jordan Ellis"),
+                "Computer science major, intramural soccer midfielder, and serial builder of tiny tools that probably should have stayed in my notes app.",
+            avatar_url: avatarSvgDataUrl("0f766e", "Jordan Ellis"),
             role: "user",
-            appearance_theme: "classic",
+            appearance_theme: "midnight",
             font_family: "Inter",
             accent_color: "#0f766e",
             font_size: "16px",
             profile_background_url:
-                "https://images.unsplash.com/photo-1493246507139-91e8fad9978e?auto=format&fit=crop&w=1400&q=80",
+                "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1400&q=80",
             approval_status: "approved",
             created_at: "2026-05-12T13:00:00.000Z",
         },
@@ -70,15 +98,15 @@ const createInitialState = () => {
             email: "avery.chen@owldiary.demo",
             password: DEMO_PASSWORD,
             about_me:
-                "Design student. I save color palettes like other people save receipts.",
-            avatar_url: demoImage("7c3aed", "Avery Chen"),
+                "Design student, campus magazine contributor, and collector of oddly specific playlists for every possible mood.",
+            avatar_url: avatarSvgDataUrl("b45309", "Avery Chen"),
             role: "user",
-            appearance_theme: "classic",
+            appearance_theme: "paper",
             font_family: "Playfair Display",
-            accent_color: "#7c3aed",
+            accent_color: "#b45309",
             font_size: "16px",
             profile_background_url:
-                "https://images.unsplash.com/photo-1493612276216-ee3925520721?auto=format&fit=crop&w=1400&q=80",
+                "https://images.unsplash.com/photo-1518972559570-0d2873e5f3f2?auto=format&fit=crop&w=1400&q=80",
             approval_status: "approved",
             created_at: "2026-05-08T13:00:00.000Z",
         },
@@ -88,26 +116,152 @@ const createInitialState = () => {
             email: "noah.ramirez@owldiary.demo",
             password: DEMO_PASSWORD,
             about_me:
-                "Trying to become the kind of person who actually revises first drafts instead of pretending they are done.",
-            avatar_url: demoImage("ea580c", "Noah Ramirez"),
+                "Biology major, greenhouse volunteer, and chronic note-taker who turns every walk into a reflection session.",
+            avatar_url: avatarSvgDataUrl("166534", "Noah Ramirez"),
             role: "user",
-            appearance_theme: "classic",
+            appearance_theme: "forest",
             font_family: "Inter",
-            accent_color: "#ea580c",
+            accent_color: "#166534",
             font_size: "16px",
             profile_background_url:
-                "https://images.unsplash.com/photo-1465101046530-73398c7f28ca?auto=format&fit=crop&w=1400&q=80",
+                "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=1400&q=80",
             approval_status: "approved",
             created_at: "2026-05-05T13:00:00.000Z",
         },
         {
             id: 5,
+            name: "Priya Patel",
+            email: "priya.patel@owldiary.demo",
+            password: DEMO_PASSWORD,
+            about_me:
+                "Pre-med student, debate team strategist, and someone who schedules joy as aggressively as deadlines.",
+            avatar_url: avatarSvgDataUrl("db2777", "Priya Patel"),
+            role: "user",
+            appearance_theme: "rose",
+            font_family: "Inter",
+            accent_color: "#db2777",
+            font_size: "16px",
+            profile_background_url:
+                "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=1400&q=80",
+            approval_status: "approved",
+            created_at: "2026-05-03T13:00:00.000Z",
+        },
+        {
+            id: 6,
+            name: "Elias Morgan",
+            email: "elias.morgan@owldiary.demo",
+            password: DEMO_PASSWORD,
+            about_me:
+                "Journalism student chasing better questions, cleaner sentences, and fewer open tabs.",
+            avatar_url: avatarSvgDataUrl("0369a1", "Elias Morgan"),
+            role: "user",
+            appearance_theme: "classic",
+            font_family: "Georgia",
+            accent_color: "#0369a1",
+            font_size: "16px",
+            profile_background_url:
+                "https://images.unsplash.com/photo-1500534623283-312aade485b7?auto=format&fit=crop&w=1400&q=80",
+            approval_status: "approved",
+            created_at: "2026-05-02T13:00:00.000Z",
+        },
+        {
+            id: 7,
+            name: "Zuri Washington",
+            email: "zuri.washington@owldiary.demo",
+            password: DEMO_PASSWORD,
+            about_me:
+                "Theatre student, costume assistant, and defender of dramatic exits that are mostly for comic timing.",
+            avatar_url: avatarSvgDataUrl("9333ea", "Zuri Washington"),
+            role: "user",
+            appearance_theme: "velvet",
+            font_family: "Playfair Display",
+            accent_color: "#9333ea",
+            font_size: "16px",
+            profile_background_url:
+                "https://images.unsplash.com/photo-1504593811423-6dd665756598?auto=format&fit=crop&w=1400&q=80",
+            approval_status: "approved",
+            created_at: "2026-05-01T13:00:00.000Z",
+        },
+        {
+            id: 8,
+            name: "Marcus Lee",
+            email: "marcus.lee@owldiary.demo",
+            password: DEMO_PASSWORD,
+            about_me:
+                "Business major, campus radio volunteer, and accidental archivist of every weird flyer on campus.",
+            avatar_url: avatarSvgDataUrl("b45309", "Marcus Lee"),
+            role: "user",
+            appearance_theme: "classic",
+            font_family: "Inter",
+            accent_color: "#b45309",
+            font_size: "16px",
+            profile_background_url:
+                "https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=1400&q=80",
+            approval_status: "approved",
+            created_at: "2026-04-30T13:00:00.000Z",
+        },
+        {
+            id: 9,
+            name: "Lena Okafor",
+            email: "lena.okafor@owldiary.demo",
+            password: DEMO_PASSWORD,
+            about_me:
+                "Nursing student learning how to stay soft without becoming disorganized.",
+            avatar_url: avatarSvgDataUrl("059669", "Lena Okafor"),
+            role: "user",
+            appearance_theme: "sage",
+            font_family: "Georgia",
+            accent_color: "#059669",
+            font_size: "16px",
+            profile_background_url:
+                "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=1400&q=80",
+            approval_status: "approved",
+            created_at: "2026-04-29T13:00:00.000Z",
+        },
+        {
+            id: 10,
+            name: "Sofia Alvarez",
+            email: "sofia.alvarez@owldiary.demo",
+            password: DEMO_PASSWORD,
+            about_me:
+                "Architecture student sketching staircases, window light, and ways to make shared spaces feel kinder.",
+            avatar_url: avatarSvgDataUrl("dc2626", "Sofia Alvarez"),
+            role: "user",
+            appearance_theme: "terracotta",
+            font_family: "Georgia",
+            accent_color: "#dc2626",
+            font_size: "16px",
+            profile_background_url:
+                "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=1400&q=80",
+            approval_status: "approved",
+            created_at: "2026-04-28T13:00:00.000Z",
+        },
+        {
+            id: ADMIN_USER_ID,
+            name: "Campus Admin",
+            email: ADMIN_EMAIL,
+            password: DEMO_PASSWORD,
+            about_me:
+                "Community admin, event organizer, and the person making sure this space feels alive and welcoming every day.",
+            avatar_url: avatarSvgDataUrl("7c2d12", "Campus Admin"),
+            role: "admin",
+            appearance_theme: "classic",
+            font_family: "Georgia",
+            accent_color: "#7c2d12",
+            font_size: "16px",
+            profile_background_url:
+                "https://images.unsplash.com/photo-1496307653780-42ee777d4833?auto=format&fit=crop&w=1400&q=80",
+            approval_status: "approved",
+            created_at: "2026-04-27T13:00:00.000Z",
+        },
+        {
+            id: PENDING_USER_ID,
             name: "Taylor Brooks",
             email: "taylor.brooks@owldiary.demo",
             password: DEMO_PASSWORD,
             about_me:
                 "Pending approval account for the admin workflow demo.",
-            avatar_url: demoImage("64748b", "Taylor Brooks"),
+            avatar_url: avatarSvgDataUrl("64748b", "Taylor Brooks"),
             role: "user",
             appearance_theme: "classic",
             font_family: "Inter",
@@ -186,6 +340,190 @@ const createInitialState = () => {
             post_font_family: "Inter",
             created_at: "2026-05-29T09:45:00.000Z",
         },
+        {
+            id: 106,
+            student_id: 1,
+            title: "Five Movies I Rewatch When I Need My Brain Back",
+            content:
+                "<p>When classes get loud, I come back to familiar stories. Not because they solve anything, but because they remind me that pacing matters and silence can still say a lot.</p><p>Current rotation: <strong>Before Sunrise</strong>, <strong>Lady Bird</strong>, <strong>Moonlight</strong>, <strong>Past Lives</strong>, and <strong>Frances Ha</strong>.</p>",
+            post_type: "text",
+            media_url: null,
+            is_hidden: 0,
+            display_order: 2,
+            post_font_family: "Georgia",
+            created_at: "2026-05-30T19:20:00.000Z",
+        },
+        {
+            id: 107,
+            student_id: 2,
+            title: "On Building Things Before You Feel Ready",
+            content:
+                "<p>I used to think confidence came first. It does not. Repetition comes first. Shipping ugly first drafts comes first. Asking better questions comes first.</p><p>Confidence is mostly what happens after you survive enough imperfect attempts.</p>",
+            post_type: "text",
+            media_url: null,
+            is_hidden: 0,
+            display_order: 1,
+            post_font_family: "Inter",
+            created_at: "2026-05-30T10:45:00.000Z",
+        },
+        {
+            id: 108,
+            student_id: 3,
+            title: "Playlist for Recovering From a Hard Week",
+            content:
+                "<p>I made a playlist for the walk home after studio: soft synths, warm vocals, and exactly one dramatic instrumental track for emotional range.</p><p>Sometimes curation is just another form of self-respect.</p>",
+            post_type: "text",
+            media_url: null,
+            is_hidden: 0,
+            display_order: 1,
+            post_font_family: "Playfair Display",
+            created_at: "2026-05-29T18:15:00.000Z",
+        },
+        {
+            id: 109,
+            student_id: 4,
+            title: "Small Things I Noticed on Today’s Walk",
+            content:
+                "<p>A crow hopping sideways across the sidewalk. New buds on the hedge outside the science building. Someone practicing trumpet badly but earnestly through an open window.</p><p>It was a good reminder that attention is its own kind of gratitude.</p>",
+            post_type: "text",
+            media_url: null,
+            is_hidden: 0,
+            display_order: 1,
+            post_font_family: "Inter",
+            created_at: "2026-05-28T16:10:00.000Z",
+        },
+        {
+            id: 110,
+            student_id: ADMIN_USER_ID,
+            title: "Welcome to OwlDiary",
+            content:
+                "<p>This space is for campus life in all its forms: wins, doubts, projects, art, quiet reflections, and the messy middle of becoming someone new.</p><p>If you are here, write something honest. Someone else probably needed to read it.</p>",
+            post_type: "text",
+            media_url: null,
+            is_hidden: 0,
+            display_order: 0,
+            post_font_family: "Georgia",
+            created_at: "2026-05-27T12:00:00.000Z",
+        },
+        {
+            id: 111,
+            student_id: ADMIN_USER_ID,
+            title: "What I Hope This Community Becomes",
+            content:
+                "<p>I want OwlDiary to feel like the table everyone can sit at. Not perfect, not performative, just thoughtful and alive. Leave comments, respond generously, and help each other feel less alone.</p>",
+            post_type: "text",
+            media_url: null,
+            is_hidden: 0,
+            display_order: 1,
+            post_font_family: "Georgia",
+            created_at: "2026-05-26T12:00:00.000Z",
+        },
+        {
+            id: 112,
+            student_id: 5,
+            title: "What Calm Looks Like Before Exams",
+            content:
+                "<p>I used to think calm meant feeling zero panic. Now I think it means having a plan, texting a friend back, and eating something before pretending caffeine counts as dinner.</p>",
+            post_type: "text",
+            media_url: null,
+            is_hidden: 0,
+            display_order: 0,
+            post_font_family: "Inter",
+            created_at: "2026-06-01T19:00:00.000Z",
+        },
+        {
+            id: 113,
+            student_id: 6,
+            title: "The Interview Question I Keep Rewriting",
+            content:
+                "<p>I am learning that the first answer is usually the polished one, not the honest one. The good version shows up after a second pass and one embarrassing delete key spree.</p>",
+            post_type: "text",
+            media_url: null,
+            is_hidden: 0,
+            display_order: 0,
+            post_font_family: "Georgia",
+            created_at: "2026-05-31T17:20:00.000Z",
+        },
+        {
+            id: 114,
+            student_id: 7,
+            title: "Costume Shop Confessional",
+            content:
+                "<p>There is something deeply humbling about spending three hours making a hem invisible and then realizing that invisible was the whole assignment.</p>",
+            post_type: "text",
+            media_url: null,
+            is_hidden: 0,
+            display_order: 0,
+            post_font_family: "Playfair Display",
+            created_at: "2026-05-30T21:05:00.000Z",
+        },
+        {
+            id: 115,
+            student_id: 8,
+            title: "Flyers Worth Saving",
+            content:
+                "<p>Campus walls are a weird archive. Half the posters are noise, but every once in a while one of them captures exactly what a semester felt like.</p>",
+            post_type: "text",
+            media_url: null,
+            is_hidden: 0,
+            display_order: 0,
+            post_font_family: "Inter",
+            created_at: "2026-05-29T13:40:00.000Z",
+        },
+        {
+            id: 116,
+            student_id: 9,
+            title: "Small Mercy on Clinical Days",
+            content:
+                "<p>I have started packing one unnecessary nice thing in my bag for long shifts. A real pen. A better snack. Lip balm that smells expensive. Tiny morale matters.</p>",
+            post_type: "text",
+            media_url: null,
+            is_hidden: 0,
+            display_order: 0,
+            post_font_family: "Georgia",
+            created_at: "2026-05-28T22:15:00.000Z",
+        },
+        {
+            id: 117,
+            student_id: 10,
+            title: "Buildings That Feel Like Apologies",
+            content:
+                "<p>Some spaces say, “move through me.” Better ones say, “stay awhile.” I have been sketching entryways that do the second thing on purpose.</p>",
+            post_type: "text",
+            media_url: null,
+            is_hidden: 0,
+            display_order: 0,
+            post_font_family: "Georgia",
+            created_at: "2026-05-27T20:05:00.000Z",
+        },
+        {
+            id: 118,
+            student_id: DEMO_USER_ID,
+            title: "Library Window Seat",
+            content:
+                "<p>I ended up staying here longer than I meant to because the light made everything feel a little less urgent. Some study spots do half the emotional work for you.</p>",
+            post_type: "image",
+            media_url:
+                "https://images.unsplash.com/photo-1512820790803-83ca734da794?auto=format&fit=crop&w=1200&q=80",
+            is_hidden: 0,
+            display_order: 3,
+            post_font_family: "Georgia",
+            created_at: "2026-06-04T18:45:00.000Z",
+        },
+        {
+            id: 119,
+            student_id: DEMO_USER_ID,
+            title: "Notes From the Editing Lab",
+            content:
+                "<p>I like rooms that look slightly in-progress. They make it easier to believe your own rough draft will turn into something real.</p>",
+            post_type: "image",
+            media_url:
+                "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1200&q=80",
+            is_hidden: 0,
+            display_order: 4,
+            post_font_family: "Georgia",
+            created_at: "2026-06-05T14:25:00.000Z",
+        },
     ];
 
     const comments = [
@@ -213,6 +551,54 @@ const createInitialState = () => {
                 "This is painfully accurate. The loss of curiosity is the part people do not name enough.",
             created_at: "2026-06-01T12:01:00.000Z",
         },
+        {
+            id: 204,
+            post_id: 112,
+            user_id: 1,
+            content:
+                "The part about eating before treating caffeine like dinner is too real.",
+            created_at: "2026-06-01T20:15:00.000Z",
+        },
+        {
+            id: 205,
+            post_id: 113,
+            user_id: 2,
+            content:
+                "Polished-first, honest-second is a brutal but useful way to put it.",
+            created_at: "2026-05-31T18:00:00.000Z",
+        },
+        {
+            id: 206,
+            post_id: 114,
+            user_id: 3,
+            content:
+                "Invisible work being the point is such a good line.",
+            created_at: "2026-05-30T22:10:00.000Z",
+        },
+        {
+            id: 207,
+            post_id: 117,
+            user_id: 6,
+            content:
+                "This makes me want to look at campus doors more carefully.",
+            created_at: "2026-05-27T21:15:00.000Z",
+        },
+        {
+            id: 208,
+            post_id: 118,
+            user_id: 2,
+            content:
+                "This looks exactly like the kind of seat you accidentally stay in for three hours.",
+            created_at: "2026-06-04T19:00:00.000Z",
+        },
+        {
+            id: 209,
+            post_id: 119,
+            user_id: 3,
+            content:
+                "The in-progress room point is strong. Finished spaces can feel weirdly intimidating.",
+            created_at: "2026-06-05T15:05:00.000Z",
+        },
     ];
 
     const likes = [
@@ -222,6 +608,17 @@ const createInitialState = () => {
         { user_id: 1, post_id: 103 },
         { user_id: 3, post_id: 103 },
         { user_id: 1, post_id: 104 },
+        { user_id: 5, post_id: 101 },
+        { user_id: 6, post_id: 112 },
+        { user_id: 7, post_id: 113 },
+        { user_id: 8, post_id: 114 },
+        { user_id: 9, post_id: 115 },
+        { user_id: 10, post_id: 117 },
+        { user_id: ADMIN_USER_ID, post_id: 102 },
+        { user_id: 2, post_id: 118 },
+        { user_id: 3, post_id: 118 },
+        { user_id: 4, post_id: 119 },
+        { user_id: 5, post_id: 119 },
     ];
 
     const commentLikes = [
@@ -233,7 +630,7 @@ const createInitialState = () => {
     const notifications = [
         {
             id: 301,
-            user_id: 1,
+            user_id: ADMIN_USER_ID,
             message: "Taylor Brooks signed up and is awaiting approval.",
             is_read: 0,
             link_url: "/settings",
@@ -281,6 +678,138 @@ const createInitialState = () => {
             title: "Studio Wall",
             description: "Every good project starts with scraps and tape.",
             created_at: "2026-05-30T12:30:00.000Z",
+        },
+        {
+            id: 404,
+            student_id: 2,
+            photo_url:
+                "https://images.unsplash.com/photo-1515879218367-8466d910aaa4?auto=format&fit=crop&w=1200&q=80",
+            display_order: 0,
+            title: "Hack Night",
+            description:
+                "Three energy drinks, one whiteboard, and a surprisingly useful prototype.",
+            created_at: "2026-05-27T12:30:00.000Z",
+        },
+        {
+            id: 405,
+            student_id: 2,
+            photo_url:
+                "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=1200&q=80",
+            display_order: 1,
+            title: "Team Standup",
+            description:
+                "The moment before everyone realizes the bug was one missing line.",
+            created_at: "2026-05-28T12:30:00.000Z",
+        },
+        {
+            id: 406,
+            student_id: 3,
+            photo_url:
+                "https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&w=1200&q=80",
+            display_order: 1,
+            title: "Reading Table",
+            description: "My favorite corner to reset after critique sessions.",
+            created_at: "2026-05-31T12:30:00.000Z",
+        },
+        {
+            id: 407,
+            student_id: 4,
+            photo_url:
+                "https://images.unsplash.com/photo-1466692476868-aef1dfb1e735?auto=format&fit=crop&w=1200&q=80",
+            display_order: 0,
+            title: "Greenhouse Morning",
+            description: "Quiet work, damp air, and the best part of my week.",
+            created_at: "2026-05-26T12:30:00.000Z",
+        },
+        {
+            id: 408,
+            student_id: 4,
+            photo_url:
+                "https://images.unsplash.com/photo-1473773508845-188df298d2d1?auto=format&fit=crop&w=1200&q=80",
+            display_order: 1,
+            title: "Field Notes",
+            description: "A page from the notebook I carry everywhere.",
+            created_at: "2026-05-27T17:45:00.000Z",
+        },
+        {
+            id: 409,
+            student_id: ADMIN_USER_ID,
+            photo_url:
+                "https://images.unsplash.com/photo-1511497584788-876760111969?auto=format&fit=crop&w=1200&q=80",
+            display_order: 0,
+            title: "Welcome Portrait",
+            description: "An owl-themed visual for the community admin account.",
+            created_at: "2026-05-24T14:20:00.000Z",
+        },
+        {
+            id: 410,
+            student_id: ADMIN_USER_ID,
+            photo_url:
+                "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?auto=format&fit=crop&w=1200&q=80",
+            display_order: 1,
+            title: "Community Night",
+            description: "A snapshot that makes the admin profile feel active and present.",
+            created_at: "2026-05-25T14:20:00.000Z",
+        },
+        {
+            id: 411,
+            student_id: 5,
+            photo_url:
+                "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=1200&q=80",
+            display_order: 0,
+            title: "Flashcards and Tea",
+            description: "The ritual that keeps exam prep from becoming chaos.",
+            created_at: "2026-05-27T08:15:00.000Z",
+        },
+        {
+            id: 412,
+            student_id: 6,
+            photo_url:
+                "https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=1200&q=80",
+            display_order: 0,
+            title: "Late Desk",
+            description: "A desk that always looks one paragraph away from clarity.",
+            created_at: "2026-05-29T21:30:00.000Z",
+        },
+        {
+            id: 413,
+            student_id: 7,
+            photo_url:
+                "https://images.unsplash.com/photo-1516280440614-37939bbacd81?auto=format&fit=crop&w=1200&q=80",
+            display_order: 0,
+            title: "Backstage Rack",
+            description: "The kind of organized chaos only theatre people trust.",
+            created_at: "2026-05-29T16:10:00.000Z",
+        },
+        {
+            id: 414,
+            student_id: 8,
+            photo_url:
+                "https://images.unsplash.com/photo-1516321497487-e288fb19713f?auto=format&fit=crop&w=1200&q=80",
+            display_order: 0,
+            title: "Radio Booth",
+            description: "Proof that tiny rooms can still hold a lot of personality.",
+            created_at: "2026-05-26T10:40:00.000Z",
+        },
+        {
+            id: 415,
+            student_id: 9,
+            photo_url:
+                "https://images.unsplash.com/photo-1484863137850-59afcfe05386?auto=format&fit=crop&w=1200&q=80",
+            display_order: 0,
+            title: "Quiet Shift",
+            description: "The kind of stillness that helps me reset after a long day.",
+            created_at: "2026-05-25T19:25:00.000Z",
+        },
+        {
+            id: 416,
+            student_id: 10,
+            photo_url:
+                "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=1200&q=80",
+            display_order: 0,
+            title: "Stair Study",
+            description: "Collecting shapes and shadows for a project that is finally making sense.",
+            created_at: "2026-05-24T11:10:00.000Z",
         },
     ];
 
@@ -395,7 +924,7 @@ const visiblePostsForViewer = (viewer) =>
         );
     });
 
-const sortPosts = (posts) =>
+const sortProfilePosts = (posts) =>
     [...posts].sort((a, b) => {
         const orderA = Number.isFinite(Number(a.display_order))
             ? Number(a.display_order)
@@ -406,6 +935,11 @@ const sortPosts = (posts) =>
         if (orderA !== orderB) return orderA - orderB;
         return String(b.created_at).localeCompare(String(a.created_at));
     });
+
+const sortFeedPosts = (posts) =>
+    [...posts].sort((a, b) =>
+        String(b.created_at).localeCompare(String(a.created_at)),
+    );
 
 const decoratePost = (post, viewer) => {
     const student = getStudentById(post.student_id);
@@ -560,7 +1094,7 @@ const handleStudentDetail = (studentId) => {
 };
 
 const handleStudentPosts = (studentId, viewer) => {
-    const posts = sortPosts(
+    const posts = sortProfilePosts(
         visiblePostsForViewer(viewer).filter(
             (post) => String(post.student_id) === String(studentId),
         ),
@@ -572,7 +1106,7 @@ const handleStudentPosts = (studentId, viewer) => {
 };
 
 const handlePostsFeed = (viewer) => {
-    const posts = sortPosts(visiblePostsForViewer(viewer)).map((post) =>
+    const posts = sortFeedPosts(visiblePostsForViewer(viewer)).map((post) =>
         decoratePost(post, viewer),
     );
     return new Response(JSON.stringify(posts), {
@@ -1195,7 +1729,7 @@ const handleCreateAdmin = async (headers, body) => {
         email,
         password,
         about_me: "Demo admin account",
-        avatar_url: demoImage("0f172a", name),
+        avatar_url: avatarSvgDataUrl("0f172a", name),
         role: "admin",
         appearance_theme: "classic",
         font_family: "Inter",
@@ -1297,7 +1831,7 @@ const handleSignup = async (body) => {
         email,
         password,
         about_me: aboutMe,
-        avatar_url: demoImage("1d4ed8", name),
+        avatar_url: avatarSvgDataUrl("1d4ed8", name),
         role: "user",
         appearance_theme: "classic",
         font_family: "Inter",
@@ -1309,7 +1843,7 @@ const handleSignup = async (body) => {
     };
     state.students.push(student);
     makeNotification(
-        1,
+        ADMIN_USER_ID,
         `${student.name} signed up and is awaiting approval.`,
         "/settings",
     );
@@ -1525,5 +2059,10 @@ export const clearDemoSession = () => {
 
 export const getDemoCredentials = () => ({
     email: DEMO_EMAIL,
+    password: DEMO_PASSWORD,
+});
+
+export const getAdminDemoCredentials = () => ({
+    email: ADMIN_EMAIL,
     password: DEMO_PASSWORD,
 });
