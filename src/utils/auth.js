@@ -1,4 +1,5 @@
 import { jwtDecode } from 'jwt-decode';
+import { clearDemoSession, getDemoToken, isDemoModeEnabled, setDemoToken } from '../demo/mockApi';
 
 const isExpired = (token) => {
   try {
@@ -13,12 +14,32 @@ const isExpired = (token) => {
 };
 
 export const getStoredAuthToken = () => {
-  const token = localStorage.getItem('token');
+  const token = isDemoModeEnabled() ? getDemoToken() : localStorage.getItem('token');
   if (!token || isExpired(token)) {
-    localStorage.removeItem('token');
+    if (isDemoModeEnabled()) {
+      clearDemoSession();
+    } else {
+      localStorage.removeItem('token');
+    }
     return null;
   }
   return token;
+};
+
+export const setStoredAuthToken = (token) => {
+  if (isDemoModeEnabled()) {
+    setDemoToken(token);
+    return;
+  }
+  localStorage.setItem('token', token);
+};
+
+export const clearStoredAuthToken = () => {
+  if (isDemoModeEnabled()) {
+    clearDemoSession();
+    return;
+  }
+  localStorage.removeItem('token');
 };
 
 export const getAuthTokenOrLogout = (navigate) => {
@@ -34,7 +55,7 @@ export const getAuthTokenOrLogout = (navigate) => {
 
 export const handleAuthFailure = (status, navigate) => {
   if (status === 401 || status === 403) {
-    localStorage.removeItem('token');
+    clearStoredAuthToken();
     if (navigate) {
       navigate('/login');
     }

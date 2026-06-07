@@ -3,7 +3,8 @@ import styled from 'styled-components';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { FiHome, FiUsers, FiUser, FiBell, FiSettings, FiLogOut, FiPlusSquare } from 'react-icons/fi';
 import { jwtDecode } from 'jwt-decode';
-import { getAuthTokenOrLogout } from '../utils/auth';
+import { clearStoredAuthToken, getAuthTokenOrLogout } from '../utils/auth';
+import { isDemoModeEnabled } from '../demo/mockApi';
 import NotificationDropdown from './NotificationDropdown';
 
 const SidebarContainer = styled.aside`
@@ -227,8 +228,15 @@ const Sidebar = ({ onCreatePost }) => {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('token'); // Clear the JWT
-    console.log('Logging out...');
+    const shouldProceed = !isDemoModeEnabled() || window.confirm(
+      'Signing out ends the demo session and resets all changes back to the default seeded state. Continue?'
+    );
+    if (!shouldProceed) return;
+    window.__owlDiarySkipDemoResetPrompt = true;
+    clearStoredAuthToken();
+    if (isDemoModeEnabled()) {
+      window.alert('Demo session ended. The app has been reset to its default state.');
+    }
     window.location.href = '/login';
   };
 

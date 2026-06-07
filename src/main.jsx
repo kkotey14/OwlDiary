@@ -8,7 +8,10 @@ import {
 } from "react-router-dom";
 import App from "./App.jsx";
 import "./index.css";
+import { installDemoApi } from "./demo/mockApi";
 import { getStoredAuthToken } from "./utils/auth";
+
+installDemoApi();
 
 // Page Components
 import Dashboard from "./pages/Dashboard.jsx";

@@ -1,10 +1,12 @@
+import { getStoredAuthToken } from "./auth";
+
 export const exportUserData = async () => {
     try {
         const response = await fetch("/api/export", {
             method: "GET",
             headers: {
                 "Content-Type": "application/json",
-                Authorization: `Bearer ${localStorage.getItem("token")}`,
+                Authorization: `Bearer ${getStoredAuthToken()}`,
             },
         });
 

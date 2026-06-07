@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link, useOutletContext } from 'react-router-dom
 import styled from 'styled-components';
 import { FiHeart, FiMessageSquare, FiArrowLeft, FiEdit2, FiTrash2 } from 'react-icons/fi';
 import { resolveMediaUrl } from '../utils/media';
-import { getAuthTokenOrLogout, handleAuthFailure } from '../utils/auth';
+import { getAuthTokenOrLogout, getStoredAuthToken, handleAuthFailure } from '../utils/auth';
 import { jwtDecode } from 'jwt-decode';
 import DOMPurify from 'dompurify';
 import BrandedLoader from '../components/BrandedLoader';
@@ -444,7 +444,7 @@ const PostPage = () => {
   const [editingText, setEditingText] = useState('');
   const currentUserId = (() => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getStoredAuthToken();
       if (!token) return null;
       return jwtDecode(token).id;
     } catch {

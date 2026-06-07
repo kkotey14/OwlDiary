@@ -4,6 +4,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { FiEye, FiEyeOff } from 'react-icons/fi'; // Import eye icons
 import Lottie from 'lottie-react';
 import owlsAnimation from '../assets/owls-animation.json';
+import { getDemoCredentials, isDemoModeEnabled } from '../demo/mockApi';
+import { setStoredAuthToken } from '../utils/auth';
 
 const Input = styled.input`
   padding: 1rem 1.25rem;
@@ -215,6 +217,14 @@ const DemoNote = styled.p`
   color: rgba(15, 23, 42, 0.68);
 `;
 
+const DemoSessionWarning = styled.p`
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: rgba(15, 23, 42, 0.72);
+  text-align: center;
+`;
+
 const DemoButton = styled.button`
   padding: 0.95rem 1rem;
   border: none;
@@ -239,8 +249,7 @@ const DemoButton = styled.button`
   }
 `;
 
-const DEMO_EMAIL = 'maya.thompson@owldiary.demo';
-const DEMO_PASSWORD = 'Password123!';
+const { email: DEMO_EMAIL, password: DEMO_PASSWORD } = getDemoCredentials();
 const LOGIN_REQUEST_TIMEOUT_MS = 15000;
 
 const getServerUnavailableMessage = () => {
@@ -278,7 +287,7 @@ const LoginPage = () => {
       let data;
       if (response.ok) {
         data = await response.json();
-        localStorage.setItem('token', data.token);
+        setStoredAuthToken(data.token);
         navigate('/');
       } else {
         let errorMessage = 'Failed to login';
@@ -320,6 +329,8 @@ const LoginPage = () => {
     await loginUser(DEMO_EMAIL, DEMO_PASSWORD);
   };
 
+  const isDemoMode = isDemoModeEnabled();
+
   return (
     <PageWrapper>
       <EditorialSection>
@@ -343,12 +354,17 @@ const LoginPage = () => {
               Reviewing the project? This signs you into a preloaded sample account so you can explore the app immediately.
             </DemoCopy>
             <DemoNote>
-              This shared demo account resets automatically every 12 hours.
+              This shared demo account resets automatically every refresh or sign out.
             </DemoNote>
             <DemoButton type="button" onClick={handleDemoLogin} disabled={isSubmitting}>
               Continue as Demo User
             </DemoButton>
           </DemoPanel>
+          {isDemoMode && (
+            <DemoSessionWarning>
+              Demo changes reset whenever the browser refreshes or you sign out.
+            </DemoSessionWarning>
+          )}
           <Input
             type="email"
             placeholder="Email Address"
@@ -371,10 +387,12 @@ const LoginPage = () => {
           <GhostButton type="submit" disabled={isSubmitting}>
             {isSubmitting ? 'Signing In...' : 'Login'}
           </GhostButton>
-          <LinksContainer>
-            <StyledLink to="/signup">Create Account</StyledLink>
-            <StyledLink to="/forgot-password">Forgot Password?</StyledLink>
-          </LinksContainer>
+          {!isDemoMode && (
+            <LinksContainer>
+              <StyledLink to="/signup">Create Account</StyledLink>
+              <StyledLink to="/forgot-password">Forgot Password?</StyledLink>
+            </LinksContainer>
+          )}
         </GlassForm>
       </FormSection>
     </PageWrapper>

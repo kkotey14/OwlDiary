@@ -4,6 +4,7 @@ import { jwtDecode } from 'jwt-decode';
 import ProfileCard from '../components/ProfileCard';
 import BrandedLoader from '../components/BrandedLoader';
 import useMinimumLoadingDelay from '../hooks/useMinimumLoadingDelay';
+import { getStoredAuthToken } from '../utils/auth';
 
 const DirectoryHeader = styled.div`
   display: flex;
@@ -67,7 +68,7 @@ const Directory = () => {
   const [query, setQuery] = useState('');
   const showLoader = useMinimumLoadingDelay(loading, 500);
   const viewerId = useMemo(() => {
-    const token = localStorage.getItem('token');
+    const token = getStoredAuthToken();
     if (!token) return null;
     try {
       const decoded = jwtDecode(token);
