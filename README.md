@@ -10,13 +10,13 @@
 
 ### Guest Student Flow
 
-| Dashboard feed | Create post modal |
+| Dashboard feed | Classroom directory |
 | --- | --- |
-| ![Guest dashboard](docs/screenshots/user-02-guest-dashboard.png) | ![Create post modal](docs/screenshots/user-03-create-post-modal.png) |
+| ![Guest dashboard](docs/screenshots/user-02-guest-dashboard.png) | ![Classroom directory](docs/screenshots/user-04-directory.png) |
 
-| Classroom directory | Student profile |
+| Create post modal | Student profile |
 | --- | --- |
-| ![Directory page](docs/screenshots/user-04-directory.png) | ![Profile page](docs/screenshots/user-05-guest-profile.png) |
+| ![Create post modal](docs/screenshots/user-03-create-post-modal.png) | ![Profile page](docs/screenshots/user-05-guest-profile.png) |
 
 | Notifications |
 | --- |
@@ -24,9 +24,9 @@
 
 ### Professor Admin Flow
 
-| Professor/admin profile | Hide inappropriate posts |
+| Hide inappropriate posts | Professor/admin profile |
 | --- | --- |
-| ![Admin profile](docs/screenshots/user-07-admin-profile.png) | ![Hide post moderation](docs/screenshots/user-08-admin-hide-post.png) |
+| ![Hide post moderation](docs/screenshots/user-08-admin-hide-post.png) | ![Admin profile](docs/screenshots/user-07-admin-profile.png) |
 
 | Approval and registration management |
 | --- |
