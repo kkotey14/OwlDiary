@@ -202,12 +202,12 @@ const createInitialState = () => {
         },
         {
             id: 9,
-            name: "Lena Okafor",
+            name: "Samira A.",
             email: "lena.okafor@owldiary.demo",
             password: DEMO_PASSWORD,
             about_me:
-                "Nursing student learning how to stay soft without becoming disorganized.",
-            avatar_url: avatarSvgDataUrl("059669", "Lena Okafor"),
+                "Nursing student, wellness storyteller, and content creator who loves turning clinical lessons and everyday routines into calm, useful posts.",
+            avatar_url: avatarSvgDataUrl("059669", "Samira A."),
             role: "user",
             appearance_theme: "sage",
             font_family: "Georgia",
