@@ -12,11 +12,11 @@
 
 | Dashboard feed | Create post modal |
 | --- | --- |
-| ![Guest dashboard](docs/screenshots/user-02-guest-dashboard.png) | ![Create post modal](docs/screenshots/user-03-create-post-modal.png) |
+| ![Guest dashboard](docs/screenshots/user-02-guest-dashboard.png) | ![Directory page](docs/screenshots/user-03-create-post-modal.png) |
 
 | Classroom directory | Student profile |
 | --- | --- |
-| ![Directory page](docs/screenshots/user-04-directory.png) | ![Profile page](docs/screenshots/user-05-guest-profile.png) |
+| ![Create post modal Directory page](docs/screenshots/user-04-directory.png) | ![Profile page](docs/screenshots/user-05-guest-profile.png) |
 
 | Notifications |
 | --- |
